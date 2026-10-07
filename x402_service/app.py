@@ -149,6 +149,51 @@ def _rate_limited(ip: str) -> bool:
 
 app = FastAPI(title="OMEGA Opportunity Intelligence", version="1.0.0")
 
+
+# ---- discovery/OpenAPI metadata (x402scan + CDP Bazaar spec surface) ----
+def _custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+
+    schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    info = schema.setdefault("info", {})
+    info["contact"] = {"name": "OMEGA Opportunity Intel",
+                       "email": "khakk763@gmail.com"}
+    info["x-payment-info"] = {
+        "scheme": "exact",
+        "network": NETWORK,
+        "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "payTo": PAY_TO,
+        "facilitator": FACILITATOR_URL,
+    }
+    components = schema.setdefault("components", {})
+    components.setdefault("securitySchemes", {})["x402Payment"] = {
+        "type": "apiKey",
+        "in": "header",
+        "name": "PAYMENT-SIGNATURE",
+        "description": "x402 v2 payment signature header (EIP-3009 exact scheme).",
+    }
+    schema["x-discovery"] = {
+        "serviceName": "OMEGA Opportunity Intel",
+        "tags": ["screening", "agents", "x402", "base", "data"],
+        "ownershipProofs": [],
+    }
+    for path, ops in schema.get("paths", {}).items():
+        if path.startswith("/v1/"):
+            for op in ops.values():
+                if isinstance(op, dict):
+                    op.setdefault("responses", {})["402"] = {
+                        "description": "Payment Required (x402 v2 challenge)",
+                        "content": {"application/json": {
+                            "schema": {"type": "object"}}},
+                    }
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = _custom_openapi
+
 # ---- x402 payment gate ----
 facilitator = HTTPFacilitatorClient(FacilitatorConfig(url=FACILITATOR_URL))
 resource_server = x402ResourceServer(facilitator)
@@ -268,7 +313,7 @@ routes = {
         ),
     ),
     "GET /v1/chain/block-number": RouteConfig(
-        accepts=_opt("$0.003"),
+        accepts=_opt("$0.001"),
         mime_type="application/json",
         description="Current block number for a supported EVM network (read-only chain call).",
         service_name="OMEGA Opportunity Intel",
@@ -341,6 +386,40 @@ async def guard(request: Request, call_next):
 async def health():
     return {"status": "OK", "service": "omega-opportunity-intelligence",
             "network": NETWORK, "payTo": PAY_TO, "kill_switch": KILL_SWITCH}
+
+
+@app.get("/.well-known/x402", include_in_schema=False)
+async def x402_manifest():
+    """x402 discovery manifest (free, unpriced)."""
+    return {
+        "x402Version": 2,
+        "serviceName": "OMEGA Opportunity Intel",
+        "network": NETWORK,
+        "facilitator": FACILITATOR_URL,
+        "payTo": PAY_TO,
+        "resources": [
+            {"url": "/v1/evaluate-opportunity", "method": "POST", "price": "$0.05"},
+            {"url": "/v1/evaluate-agent-terms", "method": "POST", "price": "$0.03"},
+            {"url": "/v1/money-flow/latest", "method": "GET", "price": "$0.02"},
+            {"url": "/v1/x402/readiness", "method": "POST", "price": "$0.01"},
+            {"url": "/v1/chain/erc20-balance", "method": "GET", "price": "$0.003"},
+            {"url": "/v1/chain/block-number", "method": "GET", "price": "$0.001"},
+        ],
+    }
+
+
+_FAVICON_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01"
+    b"\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    from fastapi.responses import Response
+
+    return Response(content=_FAVICON_PNG, media_type="image/png")
 
 
 @app.post("/v1/evaluate-opportunity")
