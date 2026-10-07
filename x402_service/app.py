@@ -130,6 +130,112 @@ class ReadinessIn(BaseModel):
     url: str
 
 
+class CsvJsonConvertIn(BaseModel):
+    mode: str
+    data: str
+
+
+# ---- CSV<->JSON conversion (mirrors the tested opentask_deliverables packages) ----
+# String-in/string-out port of csv_to_json_package/csv_to_json.py and
+# json_to_csv_package/json_to_csv.py (records orientation, empty rows
+# skipped, short rows padded, extra fields under "_extra"; JSON nested
+# objects flattened with dot keys, scalar lists joined with ";").
+import csv as _csv  # noqa: E402
+import io as _io  # noqa: E402
+
+
+class _ConvertError(ValueError):
+    pass
+
+
+def _csv_to_json(data: str):
+    rows = list(_csv.reader(_io.StringIO(data)))
+    if not rows:
+        raise _ConvertError("input_csv_empty")
+    header = [h.strip() for h in rows[0]]
+    if not any(header):
+        raise _ConvertError("header_row_empty")
+    records = []
+    for row in rows[1:]:
+        if not row or all(c.strip() == "" for c in row):
+            continue  # skip empty rows
+        if len(row) < len(header):
+            row = row + [""] * (len(header) - len(row))
+        rec = {}
+        for idx, key in enumerate(header):
+            rec[key] = row[idx] if idx < len(row) else ""
+        if len(row) > len(header):
+            rec["_extra"] = row[len(header):]
+        records.append(rec)
+    return json.dumps(records, ensure_ascii=False) + "\n", len(records)
+
+
+def _flatten_json(obj, prefix=""):
+    out = {}
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            key = f"{prefix}{k}" if not prefix else f"{prefix}.{k}"
+            if isinstance(v, dict):
+                out.update(_flatten_json(v, key))
+            elif isinstance(v, list):
+                if all(not isinstance(x, (dict, list)) for x in v):
+                    out[key] = ";".join("" if x is None else str(x) for x in v)
+                else:
+                    out[key] = json.dumps(v, ensure_ascii=False)
+            else:
+                out[key] = "" if v is None else v
+    return out
+
+
+def _json_to_csv(data: str):
+    try:
+        parsed = json.loads(data)
+    except json.JSONDecodeError as e:
+        raise _ConvertError(f"invalid_json: {e}")
+    if isinstance(parsed, dict):
+        parsed = [parsed]
+    if not isinstance(parsed, list):
+        raise _ConvertError("top_level_json_must_be_array_or_object")
+    flat = [_flatten_json(r) if isinstance(r, dict) else {"value": r} for r in parsed]
+    columns = []
+    for rec in flat:
+        for k in rec:
+            if k not in columns:
+                columns.append(k)
+    buf = _io.StringIO()
+    # lineterminator="\n" (package writes files where csv's default \r\n is
+    # fine; inside a JSON string payload plain \n is cleaner). Rows identical.
+    writer = _csv.DictWriter(buf, fieldnames=columns, delimiter=",",
+                             extrasaction="ignore", lineterminator="\n")
+    writer.writeheader()
+    for rec in flat:
+        writer.writerow({k: rec.get(k, "") for k in columns})
+    return buf.getvalue(), len(flat)
+
+
+def _readiness_fetch_5s(url):
+    """SSRF-safe probe fetch with a hard 5s timeout.
+
+    Reuses the screener's proven public-HTTPS guard (https only, DNS
+    resolution must yield only globally-routable IPs, no credentials in
+    the URL, no redirects). Never pays, signs, or sends a body.
+    """
+    import urllib.error
+    import urllib.request
+
+    safe_url, resolved_ips = screener._public_https_url(url)
+    req = urllib.request.Request(safe_url, method="GET", headers={
+        "User-Agent": "OMEGA-x402-Readiness/1.0", "Accept": "application/json"})
+    opener = urllib.request.build_opener(screener._NoRedirect)
+    try:
+        with opener.open(req, timeout=5) as resp:
+            return {"status": resp.status, "headers": dict(resp.headers),
+                    "body": resp.read(65536), "resolved_ips": resolved_ips}
+    except urllib.error.HTTPError as e:
+        return {"status": e.code, "headers": dict(e.headers or {}),
+                "body": e.read(65536), "resolved_ips": resolved_ips}
+
+
 # ---- rate limiting (in-memory token window per client IP) ----
 _hits: dict[str, deque] = defaultdict(deque)
 _hits_lock = threading.Lock()
@@ -290,6 +396,62 @@ routes = {
                           "payment_requirements", "bazaar_metadata_present", "rule"]},
         ),
     ),
+    "POST /v1/csv-json/convert": RouteConfig(
+        accepts=_opt("$0.01"),
+        mime_type="application/json",
+        description="Convert data between CSV and JSON: csv2json (records, extra fields under _extra) or json2csv (nested objects flattened with dot keys). Returns the converted string and row count.",
+        service_name="OMEGA Opportunity Intel",
+        tags=["data", "csv", "json", "convert"],
+        extensions=_bazaar_body(
+            {"mode": "csv2json", "data": "name,age\nAda,36\n"},
+            {"type": "object", "properties": {
+                "mode": {"type": "string", "enum": ["csv2json", "json2csv"]},
+                "data": {"type": "string"}},
+             "required": ["mode", "data"]},
+            {"mode": "csv2json", "data": "[{\"name\": \"Ada\", \"age\": \"36\"}]\n",
+             "row_count": 1},
+            {"properties": {
+                "mode": {"type": "string"},
+                "data": {"type": "string"},
+                "row_count": {"type": "integer"}},
+             "required": ["mode", "data", "row_count"]},
+        ),
+    ),
+    "GET /v1/agent/readiness": RouteConfig(
+        accepts=_opt("$0.005"),
+        mime_type="application/json",
+        description="Public x402-readiness probe of any third-party HTTPS URL: checks 402 shape, Base network, USDC asset, payTo and Bazaar metadata. Read-only; never pays or signs.",
+        service_name="OMEGA Opportunity Intel",
+        tags=["x402", "audit", "agents"],
+        extensions=_bazaar_query(
+            {"url": "https://example.com/paid-resource"},
+            {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
+            {"url": "https://example.com/paid-resource", "http_status": 402,
+             "verdict": "READY_FOR_PAID_TEST_REVIEW",
+             "checks": [{"name": "unpaid_returns_402", "ok": True, "detail": "http_status=402"}],
+             "payment_requirements": [
+                 {"scheme": "exact", "network": "eip155:8453",
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount_base_units": "10000",
+                  "payTo": "0x0000000000000000000000000000000000000000"}],
+             "bazaar_metadata_present": True,
+             "rule": "Readiness is not a sale or payment. A genuine settled customer payment is required before revenue."},
+            {"properties": {
+                "url": {"type": "string"},
+                "http_status": {"type": "number"},
+                "verdict": {"type": "string"},
+                "checks": {"type": "array", "items": {"type": "object", "properties": {
+                    "name": {"type": "string"},
+                    "ok": {"type": "boolean"},
+                    "detail": {"type": "string"}},
+                    "required": ["name", "ok", "detail"]}},
+                "payment_requirements": {"type": "array", "items": {"type": "object"}},
+                "bazaar_metadata_present": {"type": "boolean"},
+                "rule": {"type": "string"}},
+             "required": ["url", "http_status", "verdict", "checks",
+                          "payment_requirements", "bazaar_metadata_present", "rule"]},
+        ),
+    ),
     "GET /v1/money-flow/latest": RouteConfig(
         accepts=_opt("$0.02"),
         mime_type="application/json",
@@ -402,6 +564,8 @@ async def x402_manifest():
             {"url": "/v1/evaluate-agent-terms", "method": "POST", "price": "$0.03"},
             {"url": "/v1/money-flow/latest", "method": "GET", "price": "$0.02"},
             {"url": "/v1/x402/readiness", "method": "POST", "price": "$0.01"},
+            {"url": "/v1/csv-json/convert", "method": "POST", "price": "$0.01"},
+            {"url": "/v1/agent/readiness", "method": "GET", "price": "$0.005"},
             {"url": "/v1/chain/erc20-balance", "method": "GET", "price": "$0.003"},
             {"url": "/v1/chain/block-number", "method": "GET", "price": "$0.001"},
         ],
@@ -436,6 +600,29 @@ async def evaluate_agent_terms(body: EvaluateTermsIn):
 async def x402_readiness(body: ReadinessIn):
     try:
         return screener.x402_readiness(body.url)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
+
+@app.post("/v1/csv-json/convert")
+async def csv_json_convert(body: CsvJsonConvertIn):
+    try:
+        if body.mode == "csv2json":
+            converted, row_count = _csv_to_json(body.data)
+        elif body.mode == "json2csv":
+            converted, row_count = _json_to_csv(body.data)
+        else:
+            return JSONResponse(status_code=400,
+                                content={"error": "mode_must_be_csv2json_or_json2csv"})
+    except _ConvertError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    return {"mode": body.mode, "data": converted, "row_count": row_count}
+
+
+@app.get("/v1/agent/readiness")
+async def agent_readiness(url: str):
+    try:
+        return screener.x402_readiness(url, fetcher=_readiness_fetch_5s)
     except ValueError as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
 

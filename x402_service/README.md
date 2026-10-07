@@ -13,6 +13,8 @@ pitch, no review queue.
 | POST /v1/evaluate-opportunity | $0.05 | fail-closed opportunity screen (vetoes, score, EV) |
 | POST /v1/evaluate-agent-terms | $0.03 | agent-terms gate + terms fingerprint |
 | POST /v1/x402/readiness | $0.01 | x402 readiness audit of a public HTTPS endpoint |
+| POST /v1/csv-json/convert | $0.01 | CSV↔JSON conversion (mode csv2json/json2csv), returns converted string + row count |
+| GET /v1/agent/readiness?url= | $0.005 | public x402-readiness probe of a third-party HTTPS URL (SSRF-safe, 5s timeout, never pays) |
 | GET /v1/money-flow/latest | $0.02 | money-flow snapshot (signals only) |
 | GET /v1/chain/block-number | $0.003 | EVM block number (read-only) |
 | GET /v1/chain/erc20-balance | $0.003 | ERC-20 balance/decimals/symbol (read-only) |
