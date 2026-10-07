@@ -64,15 +64,42 @@ from x402.extensions.bazaar import declare_discovery_extension  # noqa: E402
 from x402.extensions.bazaar.resource_service import OutputConfig  # noqa: E402
 
 
-def _bazaar(input_example: dict, input_schema: dict, output_example: dict) -> dict:
-    return {
-        "bazaar": declare_discovery_extension(
-            input=input_example,
-            input_schema=input_schema,
-            body_type="json",
-            output=OutputConfig(example=output_example),
-        )
-    }
+# ---- Bazaar discovery extensions (x402 v2, CDP/x402scan shapes) ----
+# `declare_discovery_extension` returns {"bazaar": {...}} — that return value
+# IS the extensions fragment; it must be used directly, never re-wrapped in an
+# outer {"bazaar": ...} (the old code double-nested it, which discovery
+# catalogs reject as schema-invalid).
+#
+# GET routes use query extensions (no body_type) so the 402 advertises
+# `queryParams`, not a JSON body; POST routes keep body_type="json".
+#
+# Every priced route declares BOTH an output example (info.output) and an
+# output schema (schema.properties.output.properties.example), matching the
+# `OutputConfig(example=..., schema=...)` contract. Without the schema, CDP
+# Bazaar and x402scan index the resource as non-invocable-unknown-output.
+
+_EVM_ADDRESS_PATTERN = "^0x[a-fA-F0-9]{40}$"
+
+
+def _bazaar_body(input_example: dict, input_schema: dict,
+                 output_example: dict, output_schema: dict) -> dict:
+    """Discovery extension for POST routes (JSON request body)."""
+    return declare_discovery_extension(
+        input=input_example,
+        input_schema=input_schema,
+        body_type="json",
+        output=OutputConfig(example=output_example, schema=output_schema),
+    )
+
+
+def _bazaar_query(input_example: dict, input_schema: dict,
+                  output_example: dict, output_schema: dict) -> dict:
+    """Discovery extension for GET routes (query parameters)."""
+    return declare_discovery_extension(
+        input=input_example,
+        input_schema=input_schema,
+        output=OutputConfig(example=output_example, schema=output_schema),
+    )
 
 
 def _opt(price: str):
@@ -134,7 +161,7 @@ routes = {
         description="Fail-closed opportunity screen: vetoes, 0-100 score and expected value for one candidate task. Estimates only, never revenue.",
         service_name="OMEGA Opportunity Intel",
         tags=["screening", "agents", "risk"],
-        extensions=_bazaar(
+        extensions=_bazaar_body(
             {"capital_required": 0, "reward_usd": 500, "probability": 0.4, "risk": 0.3,
              "automation_level": 0.9, "status": "eligible_verified",
              "payment_proof": "ESCROW_VERIFIED", "verification": "OFFICIAL"},
@@ -144,7 +171,17 @@ routes = {
                 "automation_level": {"type": "number"}, "status": {"type": "string"},
                 "payment_proof": {"type": "string"}, "verification": {"type": "string"}}},
             {"verdict": "EXECUTE_AUTONOMOUSLY", "score": 87.2, "vetoes": [],
-             "estimated_ev_usd": 200.0, "money_state": "ESTIMATED_ONLY_NOT_REVENUE"},
+             "estimated_ev_usd": 200.0, "money_state": "ESTIMATED_ONLY_NOT_REVENUE",
+             "rule": "Only verified payment proof can become REALIZED/SETTLED in Treasury."},
+            {"properties": {
+                "verdict": {"type": "string"},
+                "score": {"type": "number"},
+                "vetoes": {"type": "array", "items": {"type": "string"}},
+                "estimated_ev_usd": {"type": "number"},
+                "money_state": {"type": "string"},
+                "rule": {"type": "string"}},
+             "required": ["verdict", "score", "vetoes", "estimated_ev_usd",
+                          "money_state", "rule"]},
         ),
     ),
     "POST /v1/evaluate-agent-terms": RouteConfig(
@@ -153,13 +190,24 @@ routes = {
         description="Agent-terms gate: decides whether a task's terms allow autonomous agent submission, with reasons and a terms fingerprint.",
         service_name="OMEGA Opportunity Intel",
         tags=["terms", "agents", "compliance"],
-        extensions=_bazaar(
+        extensions=_bazaar_body(
             {"agentAccess": "AGENT_ALLOWED", "description": "Research report", "eligibility": []},
             {"type": "object", "properties": {
                 "agentAccess": {"type": "string"}, "description": {"type": "string"},
                 "eligibility": {"type": "array"}, "requirements": {"type": "array"},
                 "flags": {"type": "array"}}},
-            {"gate": "REVIEW_DELIVERABLE_BUILD", "reasons": [], "submission_allowed": True},
+            {"gate": "REVIEW_DELIVERABLE_BUILD", "reasons": [],
+             "terms_fingerprint": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15",
+             "submission_allowed": True,
+             "rule": "A clean gate still requires a built and QA-passed deliverable plus a fresh gate before submission."},
+            {"properties": {
+                "gate": {"type": "string"},
+                "reasons": {"type": "array", "items": {"type": "string"}},
+                "terms_fingerprint": {"type": "string"},
+                "submission_allowed": {"type": "boolean"},
+                "rule": {"type": "string"}},
+             "required": ["gate", "reasons", "terms_fingerprint",
+                          "submission_allowed", "rule"]},
         ),
     ),
     "POST /v1/x402/readiness": RouteConfig(
@@ -168,11 +216,33 @@ routes = {
         description="x402 readiness inspection of a public HTTPS endpoint: checks 402 shape, Base network, USDC asset, payTo and Bazaar metadata. Never sends payment.",
         service_name="OMEGA Opportunity Intel",
         tags=["x402", "audit", "base"],
-        extensions=_bazaar(
+        extensions=_bazaar_body(
             {"url": "https://example.com/paid-resource"},
             {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]},
             {"url": "https://example.com/paid-resource", "http_status": 402,
-             "verdict": "READY_FOR_PAID_TEST_REVIEW", "bazaar_metadata_present": True},
+             "verdict": "READY_FOR_PAID_TEST_REVIEW",
+             "checks": [{"name": "unpaid_returns_402", "ok": True, "detail": "http_status=402"}],
+             "payment_requirements": [
+                 {"scheme": "exact", "network": "eip155:8453",
+                  "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+                  "amount_base_units": "10000",
+                  "payTo": "0x0000000000000000000000000000000000000000"}],
+             "bazaar_metadata_present": True,
+             "rule": "Readiness is not a sale or payment. A genuine settled customer payment is required before revenue."},
+            {"properties": {
+                "url": {"type": "string"},
+                "http_status": {"type": "number"},
+                "verdict": {"type": "string"},
+                "checks": {"type": "array", "items": {"type": "object", "properties": {
+                    "name": {"type": "string"},
+                    "ok": {"type": "boolean"},
+                    "detail": {"type": "string"}},
+                    "required": ["name", "ok", "detail"]}},
+                "payment_requirements": {"type": "array", "items": {"type": "object"}},
+                "bazaar_metadata_present": {"type": "boolean"},
+                "rule": {"type": "string"}},
+             "required": ["url", "http_status", "verdict", "checks",
+                          "payment_requirements", "bazaar_metadata_present", "rule"]},
         ),
     ),
     "GET /v1/money-flow/latest": RouteConfig(
@@ -181,10 +251,20 @@ routes = {
         description="Latest money-flow snapshot: stablecoin and chain TVL signals with sources. Market signals only, not demand proof or revenue.",
         service_name="OMEGA Opportunity Intel",
         tags=["money-flow", "stablecoins", "data"],
-        extensions=_bazaar(
+        extensions=_bazaar_query(
             {},
             {"type": "object", "properties": {}},
-            {"status": "OK", "sources": [], "top_chains": [], "stablecoins": {}},
+            {"status": "OK", "sources": [], "top_chains": [], "stablecoins": {},
+             "global_market": {},
+             "disclaimer": "Market and TVL signals only. Not demand proof, not an opportunity, and not revenue."},
+            {"properties": {
+                "status": {"type": "string"},
+                "sources": {"type": ["array", "object", "null"]},
+                "top_chains": {"type": "array"},
+                "stablecoins": {"type": "object"},
+                "global_market": {"type": ["object", "null"]},
+                "disclaimer": {"type": "string"}},
+             "required": ["status", "sources", "top_chains", "stablecoins", "disclaimer"]},
         ),
     ),
     "GET /v1/chain/block-number": RouteConfig(
@@ -193,10 +273,16 @@ routes = {
         description="Current block number for a supported EVM network (read-only chain call).",
         service_name="OMEGA Opportunity Intel",
         tags=["chain", "evm", "data"],
-        extensions=_bazaar(
+        extensions=_bazaar_query(
             {"network": "ethereum"},
-            {"type": "object", "properties": {"network": {"type": "string"}}},
-            {"network": "ethereum", "result": "0x1234abc", "block_number": 19088700},
+            {"type": "object", "properties": {
+                "network": {"type": "string", "enum": ["ethereum"]}}},
+            {"network": "ethereum", "result": "0x1715f90", "block_number": 24207248},
+            {"properties": {
+                "network": {"type": "string"},
+                "result": {"type": "string"},
+                "block_number": {"type": "integer"}},
+             "required": ["network", "result", "block_number"]},
         ),
     ),
     "GET /v1/chain/erc20-balance": RouteConfig(
@@ -205,13 +291,28 @@ routes = {
         description="ERC-20 balance, decimals, symbol and name for an address and token contract on a supported EVM network (read-only chain call).",
         service_name="OMEGA Opportunity Intel",
         tags=["chain", "erc20", "data"],
-        extensions=_bazaar(
+        extensions=_bazaar_query(
             {"network": "ethereum", "address": "0x0000000000000000000000000000000000000000",
              "contract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},
             {"type": "object", "properties": {
-                "network": {"type": "string"}, "address": {"type": "string"},
-                "contract": {"type": "string"}}, "required": ["address", "contract"]},
-            {"network": "ethereum", "balance": "0", "decimals": 6, "symbol": "USDC", "name": "USD Coin"},
+                "network": {"type": "string", "enum": ["ethereum"]},
+                "address": {"type": "string", "pattern": _EVM_ADDRESS_PATTERN},
+                "contract": {"type": "string", "pattern": _EVM_ADDRESS_PATTERN}},
+             "required": ["address", "contract"]},
+            {"network": "ethereum",
+             "account": "0x0000000000000000000000000000000000000000",
+             "contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+             "balance": "0", "decimals": 6, "symbol": "USDC", "name": "USD Coin"},
+            {"properties": {
+                "network": {"type": "string"},
+                "account": {"type": "string"},
+                "contract_address": {"type": "string"},
+                "balance": {"type": "string"},
+                "decimals": {"type": "integer"},
+                "symbol": {"type": "string"},
+                "name": {"type": "string"}},
+             "required": ["network", "account", "contract_address", "balance",
+                          "decimals", "symbol", "name"]},
         ),
     ),
 }
