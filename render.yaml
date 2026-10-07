@@ -1,0 +1,20 @@
+# OMEGA x402 — Render Blueprint (CANONICAL copy; Render reads render.yaml
+# from the repository root, and the repo root for this deploy is
+# income_assets/). A mirror lives in x402_service/render.yaml.
+# Build context is income_assets/ itself: the Dockerfile copies
+# x402_service/ and opportunity_intelligence/ from here.
+services:
+  - type: web
+    name: omega-x402
+    runtime: docker
+    plan: free
+    dockerfilePath: ./x402_service/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: OMEGA_PAY_TO
+        value: 0xCF3388dB231300f88285351154FbC17098A01bD2
+      - key: OMEGA_X402_NETWORK
+        value: eip155:8453
+      - key: OMEGA_X402_FACILITATOR_URL
+        value: https://facilitator.payai.network

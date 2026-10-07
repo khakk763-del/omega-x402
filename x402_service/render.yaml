@@ -1,0 +1,20 @@
+# Render free web service — MIRROR of ../render.yaml (the canonical
+# Blueprint lives at the repo root, income_assets/, because Render reads
+# render.yaml from there). Keep both in sync. Build context must be the
+# income_assets/ directory (the Dockerfile copies x402_service/ and
+# opportunity_intelligence/ from there).
+services:
+  - type: web
+    name: omega-x402
+    runtime: docker
+    plan: free
+    dockerfilePath: ./x402_service/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: OMEGA_PAY_TO
+        value: 0xCF3388dB231300f88285351154FbC17098A01bD2
+      - key: OMEGA_X402_NETWORK
+        value: eip155:8453
+      - key: OMEGA_X402_FACILITATOR_URL
+        value: https://facilitator.payai.network

@@ -1,0 +1,14 @@
+# Local runtime state and secrets — never commit.
+x402_service/.venv/
+**/__pycache__/
+*.py[cod]
+.env
+.env.*
+x402_service/proof_payer.json
+x402_service/proof_payer_key.tmp
+*.tmp
+*.key
+*.pem
+*.secret
+*.log
+x402_service/current_public_url.txt

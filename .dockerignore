@@ -1,0 +1,18 @@
+# Build context = income_assets/ (Render: dockerContext ".",
+# dockerfilePath ./x402_service/Dockerfile). This file MUST sit at the
+# context root to be honored. Never ship local runtime state or
+# proof credentials into the image.
+x402_service/.venv/
+**/__pycache__/
+*.py[cod]
+x402_service/.env
+x402_service/.env.*
+x402_service/proof_payer.json
+x402_service/proof_payer_key.tmp
+**/*.tmp
+**/*.key
+**/*.pem
+**/*.secret
+*.log
+x402_service/current_public_url.txt
+.git/

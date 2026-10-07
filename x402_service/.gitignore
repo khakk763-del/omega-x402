@@ -1,0 +1,14 @@
+# Local runtime state and secrets — never commit.
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+proof_payer.json
+proof_payer_key.tmp
+*.tmp
+*.key
+*.pem
+*.secret
+*.log
+current_public_url.txt

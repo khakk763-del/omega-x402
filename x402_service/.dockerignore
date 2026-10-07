@@ -1,0 +1,16 @@
+# Defense-in-depth copy. The authoritative ignore file for the Render
+# build is ../.dockerignore (build context = income_assets/). Keep both
+# in sync so a build started from either directory excludes secrets.
+.venv
+__pycache__
+*.py[cod]
+.env
+.env.*
+proof_payer.json
+proof_payer_key.tmp
+*.tmp
+*.key
+*.pem
+*.secret
+*.log
+current_public_url.txt

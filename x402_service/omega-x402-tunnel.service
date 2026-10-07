@@ -1,0 +1,16 @@
+# Cloudflare quick tunnel for the OMEGA x402 service.
+# Quick tunnels are account-free; the URL is ephemeral (regenerated on
+# restart). A stable named tunnel needs Khalid's free Cloudflare account.
+[Unit]
+Description=Cloudflare quick tunnel -> OMEGA x402 service
+After=omega-x402.service
+Requires=omega-x402.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8766
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

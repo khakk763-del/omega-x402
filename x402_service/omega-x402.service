@@ -1,0 +1,18 @@
+# OMEGA x402 sell-side service — systemd unit (install in the user
+# session where a systemd user bus exists, or as a system unit with
+# User= adjusted). Config lives in the service dir's .env (mode 600).
+[Unit]
+Description=OMEGA Opportunity Intelligence x402 service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hatch/workspace/goals/1000-2000/files/OMEGA/income_assets/x402_service
+ExecStart=/home/hatch/workspace/goals/1000-2000/files/OMEGA/income_assets/x402_service/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8766
+Restart=on-failure
+RestartSec=5
+Environment=PORT=8766
+
+[Install]
+WantedBy=default.target

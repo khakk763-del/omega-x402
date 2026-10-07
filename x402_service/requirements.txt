@@ -1,0 +1,6 @@
+fastapi==0.142.2
+uvicorn==0.54.0
+pydantic==2.13.5
+python-dotenv==1.2.4
+httpx==0.28.1
+x402[fastapi,evm,httpx,extensions]==2.25.0
