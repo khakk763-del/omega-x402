@@ -13,6 +13,12 @@ only creates the stable public URL; it does not create demand.
   receive address of the TaskMarket burner wallet — an address, not a
   key), `OMEGA_X402_NETWORK=eip155:8453`,
   `OMEGA_X402_FACILITATOR_URL=https://facilitator.payai.network`
+  (fallback only; superseded by the CDP env vars below)
+- Phase 2 env (set in the dashboard, never in git): `CDP_API_KEY_ID` +
+  `CDP_API_KEY_SECRET` — declared as `sync: false` in `render.yaml`.
+  When both are present the app uses the CDP Facilitator
+  (`https://api.cdp.coinbase.com/platform/v2/x402`). The SECRET is pasted
+  by Khalid himself from his Secure Vault copy.
 - **No private keys, tokens, or `.env` are in the repo or the image**
   (see the security sweep in `x402_phase1_build_2026-10-07.md`).
   Never add a private key as an env var for this service.
@@ -64,10 +70,15 @@ before changing anything — do not redeploy blindly.
    `https://omega-x402.onrender.com` (the registration form needs the
    live stable URL; the rotating Serveo tunnel URL was deliberately
    not registered).
-2. Phase 2 (later, optional): Khalid creates a free CDP portal API key
-   → facilitator switches from PayAI to CDP → first mainnet settle
-   auto-indexes the service in the CDP Bazaar. Keys go to the secure
-   store, never into this repo or chat.
+2. Phase 2 (code wired 2026-10-08): Khalid created a free CDP portal
+   API key (`omega-x402`) → Khalid pastes `CDP_API_KEY_ID` +
+   `CDP_API_KEY_SECRET` into the Render dashboard env (declared
+   `sync: false` in `render.yaml`; the app then selects the CDP
+   Facilitator automatically, PayAI remains the no-key fallback) →
+   first mainnet settle via CDP auto-indexes the service in the CDP
+   Bazaar. Keys live in the secure store, never in this repo or chat.
+   Verify after the env deploy: `GET /health` shows
+   `"facilitator": "cdp"`.
 
 ## Free-tier caveats (expected behaviour, not bugs)
 

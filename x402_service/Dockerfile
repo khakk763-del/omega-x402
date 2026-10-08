@@ -16,6 +16,12 @@ COPY x402_service/ ./x402_service/
 COPY opportunity_intelligence/ ./opportunity_intelligence/
 
 WORKDIR /app/x402_service
+# Fallback facilitator only (Phase 1, no key). Render env vars override
+# this at runtime. Phase 2: when CDP_API_KEY_ID + CDP_API_KEY_SECRET are
+# injected as runtime env vars, the app selects the CDP Facilitator
+# (https://api.cdp.coinbase.com/platform/v2/x402) instead — CDP_API_KEY_ID
+# and CDP_API_KEY_SECRET are SECRETS and must NEVER be baked into the
+# image (no ENV/ARG for them here, ever).
 ENV OMEGA_X402_FACILITATOR_URL=https://facilitator.payai.network
 ENV OMEGA_X402_NETWORK=eip155:8453
 # OMEGA_PAY_TO is injected at deploy time (burner wallet, not a secret)

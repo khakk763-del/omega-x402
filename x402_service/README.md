@@ -1,9 +1,52 @@
-# OMEGA Opportunity Intelligence — x402 service (Phase 1)
+# OMEGA Opportunity Intelligence — x402 service (Phase 1 + Phase 2 facilitator)
 
 Wraps the tested OMEGA screener (`../opportunity_intelligence/service.py`)
 behind the official `x402` Python middleware (v2.25.0). Each priced call
 settles USDC on Base at call time to the payTo wallet — no employer, no
 pitch, no review queue.
+
+## Facilitator selection (Phase 2)
+
+The facilitator is chosen at startup from environment variables:
+
+| Env state | Facilitator | Auth |
+|---|---|---|
+| `CDP_API_KEY_ID` **and** `CDP_API_KEY_SECRET` set | CDP Facilitator `https://api.cdp.coinbase.com/platform/v2/x402` | Official `cdp-sdk` (`cdp.x402.create_facilitator_config`) generates a fresh CDP JWT per verify/settle/supported call |
+| otherwise | `OMEGA_X402_FACILITATOR_URL` (default `https://facilitator.payai.network`) | none (Phase 1) |
+
+Why CDP: the CDP Facilitator indexes an endpoint in the **CDP Bazaar**
+after it settles a payment for an endpoint advertising Bazaar metadata —
+settling through PayAI does not index anything. First 1,000 onchain
+facilitator transactions/month are free ($0.001 each after that;
+verification is always free).
+
+Key rules:
+
+- `CDP_API_KEY_ID` is a UUID (visible in the CDP portal, not a secret).
+- `CDP_API_KEY_SECRET` is a **secret**. It lives in Khalid's Secure Vault
+  and is pasted by Khalid himself into the Render dashboard env vars.
+  It is never committed, never baked into the Docker image, never logged,
+  and never sent in chat.
+- If the CDP env vars are set but `cdp-sdk` is missing, the app fails
+  closed at startup with a clear error instead of silently downgrading
+  to PayAI.
+- `/health` reports the active facilitator (`facilitator` +
+  `facilitator_url`); `/.well-known/x402` and the OpenAPI
+  `x-payment-info` advertise the same active facilitator URL.
+
+Phase 2 activation (Khalid's steps, once):
+
+1. CDP portal → create a free Secret API key (done 2026-10-08,
+   key name `omega-x402`).
+2. Render dashboard → `omega-x402` service → Environment → add
+   `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` (`sync: false` entries are
+   already declared in `render.yaml`) → save. Render redeploys
+   automatically on the push; env changes trigger their own deploy.
+3. Verify: `GET /health` shows `"facilitator": "cdp"`.
+
+Remaining gate after activation: Bazaar indexing happens only after the
+**first real buyer payment settles via CDP**. A key alone does not index
+anything and does not create demand.
 
 ## Endpoints
 
@@ -16,14 +59,16 @@ pitch, no review queue.
 | POST /v1/csv-json/convert | $0.01 | CSV↔JSON conversion (mode csv2json/json2csv), returns converted string + row count |
 | GET /v1/agent/readiness?url= | $0.005 | public x402-readiness probe of a third-party HTTPS URL (SSRF-safe, 5s timeout, never pays) |
 | GET /v1/money-flow/latest | $0.02 | money-flow snapshot (signals only) |
-| GET /v1/chain/block-number | $0.003 | EVM block number (read-only) |
+| GET /v1/chain/block-number | $0.001 | EVM block number (read-only) |
 | GET /v1/chain/erc20-balance | $0.003 | ERC-20 balance/decimals/symbol (read-only) |
 
 ## Config (.env, mode 600)
 
 - `OMEGA_PAY_TO` — TaskMarket burner wallet (agent 98359)
 - `OMEGA_X402_NETWORK` — `eip155:8453` (Base mainnet); `eip155:84532` for the Sepolia proof
-- `OMEGA_X402_FACILITATOR_URL` — `https://facilitator.payai.network` (Phase 1, no API key)
+- `OMEGA_X402_FACILITATOR_URL` — `https://facilitator.payai.network` (Phase 1 fallback, no API key; ignored when CDP keys are set)
+- `CDP_API_KEY_ID` — CDP Secret API key ID (UUID); with `CDP_API_KEY_SECRET` enables the Phase 2 CDP Facilitator
+- `CDP_API_KEY_SECRET` — CDP Secret API key secret (**secret**: Render dashboard / Secure Vault only, never in git or chat)
 - `OMEGA_KILL_SWITCH=1` — paid routes return 503, /health stays up
 - `OMEGA_RATE_LIMIT_PER_MIN` — per-IP request cap (default 60)
 - `OMEGA_MAX_BODY_BYTES` — request size cap (default 64000)

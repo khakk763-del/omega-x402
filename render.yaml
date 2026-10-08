@@ -18,3 +18,13 @@ services:
         value: eip155:8453
       - key: OMEGA_X402_FACILITATOR_URL
         value: https://facilitator.payai.network
+      # Phase 2 (CDP facilitator): set BOTH values in the Render dashboard
+      # (sync: false = managed in dashboard, never committed to git).
+      # When both are present the app uses the CDP Facilitator
+      # (https://api.cdp.coinbase.com/platform/v2/x402) instead of PayAI.
+      # CDP_API_KEY_SECRET is a SECRET: Khalid pastes it in the dashboard
+      # himself from his Secure Vault copy — never in chat, never in git.
+      - key: CDP_API_KEY_ID
+        sync: false
+      - key: CDP_API_KEY_SECRET
+        sync: false
