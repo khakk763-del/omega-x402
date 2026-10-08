@@ -56,11 +56,33 @@ anything and does not create demand.
 | POST /v1/evaluate-opportunity | $0.05 | fail-closed opportunity screen (vetoes, score, EV) |
 | POST /v1/evaluate-agent-terms | $0.03 | agent-terms gate + terms fingerprint |
 | POST /v1/x402/readiness | $0.01 | x402 readiness audit of a public HTTPS endpoint |
-| POST /v1/csv-json/convert | $0.01 | CSV↔JSON conversion (mode csv2json/json2csv), returns converted string + row count |
-| GET /v1/agent/readiness?url= | $0.005 | public x402-readiness probe of a third-party HTTPS URL (SSRF-safe, 5s timeout, never pays) |
+| POST /v1/csv-json/convert | $0.01 | CSV↔JSON conversion (mode csv2json/json2csv) |
+| GET /v1/agent/readiness?url= | $0.005 | public x402-readiness probe (SSRF-safe, 5s, never pays) |
 | GET /v1/money-flow/latest | $0.02 | money-flow snapshot (signals only) |
-| GET /v1/chain/block-number | $0.001 | EVM block number (read-only) |
+| GET /v1/crypto/trending?chain&limit | $0.01 | DexScreener boosted/trending tokens, best pair each |
+| GET /v1/defi/yields?min_tvl&limit&chain | $0.01 | top DeFi yields by APY (DefiLlama, TVL-filtered) |
+| GET /v1/crypto/token-price?addresses= | $0.005 | token price + metrics for ≤3 token addresses |
+| GET /v1/news/digest?topic&limit | $0.005 | crypto token-profile digest or Hacker News top stories |
+| GET /v1/weather/current?city= | $0.003 | current weather + 3-day forecast (Open-Meteo) |
 | GET /v1/chain/erc20-balance | $0.003 | ERC-20 balance/decimals/symbol (read-only) |
+| GET /v1/chain/block-number | $0.001 | EVM block number (read-only) |
+
+### Bazaar utility SKUs (2026-10-08 scale-up)
+
+Five cheap utility/data calls aimed at the proven CDP Bazaar demand band
+($0.001–$0.03). All are strictly read-only and served from public,
+keyless sources:
+
+- **Token price & trending** — DexScreener public API
+  (`token-pairs/v1/{chain}/{address}`, `token-boosts/top/v1`).
+- **Weather** — Open-Meteo forecast + geocoding (no key).
+- **DeFi yields** — DefiLlama `yields.llama.fi/pools` (TVL ≥ $1M default,
+  outlier pools excluded; ~11 MB upstream payload, cached 5 min).
+- **News digest** — DexScreener token profiles (crypto) or the Hacker
+  News Firebase API (tech). CryptoCompare/CMC news APIs require keys and
+  are deliberately not used (zero-capital rule).
+- All fetchers use hard timeouts (≤10 s), a small in-memory cache, and
+  return honest upstream errors (502) rather than fabricating data.
 
 ## Config (.env, mode 600)
 

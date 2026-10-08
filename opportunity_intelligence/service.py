@@ -20,6 +20,10 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import concurrent.futures  # noqa: E402 - module-level (digest fetchers)
+import threading  # noqa: E402 - module-level (fetch cache lock)
+import time as _time  # noqa: E402 - module-level (fetch cache)
+
 BASE = Path(__file__).resolve().parent
 OMEGA = BASE.parents[1]
 sys.path.insert(0, str(OMEGA))
@@ -355,3 +359,341 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# =====================================================================
+# Bazaar utility SKUs (2026-10-08): cheap high-demand data calls for the
+# x402 sell-side. Sources are all public + free + keyless (DexScreener,
+# Open-Meteo + geocoding, DefiLlama yields, Hacker News Firebase DB).
+# Every fetch is hard-timeouted (<=10s), cached briefly, and never
+# recurses into HTML scraping. Read-only data signals — never revenue.
+# =====================================================================
+DS_BASE = "https://api.dexscreener.com"
+METEO_BASE = "https://api.open-meteo.com/v1/forecast"
+METEO_GEO = "https://geocoding-api.open-meteo.com/v1/search"
+LLAMA_YIELDS = "https://yields.llama.fi/pools"
+HN_BASE = "https://hacker-news.firebaseio.com/v0"
+
+_bazaar_cache: dict[str, tuple[float, object]] = {}
+_bazaar_cache_lock = threading.Lock()
+
+
+def _fetch_json_http(url: str, timeout: float = 8.0):
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "OMEGA-x402-Bazaar/1.0", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read(20_000_000).decode("utf-8", "replace"))
+
+
+def _cached_fetch(key: str, ttl: float, producer):
+    now = _time.time()
+    with _bazaar_cache_lock:
+        hit = _bazaar_cache.get(key)
+    if hit and now - hit[0] <= ttl:
+        return hit[1]
+    val = producer()
+    with _bazaar_cache_lock:
+        _bazaar_cache[key] = (now, val)
+    if len(_bazaar_cache) > 200:  # crude cap; entries are tiny
+        with _bazaar_cache_lock:
+            _bazaar_cache.clear()
+    return val
+
+
+def _ds_pair_row(p: dict) -> dict:
+    tx = p.get("txns") or {}
+    vol = p.get("volume") or {}
+    chg = p.get("priceChange") or {}
+
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "pair_address": p.get("pairAddress"),
+        "chain": p.get("chainId"),
+        "dex": p.get("dexId"),
+        "base_token": (p.get("baseToken") or {}).get("symbol"),
+        "base_token_address": (p.get("baseToken") or {}).get("address"),
+        "quote_token": (p.get("quoteToken") or {}).get("symbol"),
+        "price_usd": _num(p.get("priceUsd")),
+        "price_native": _num(p.get("priceNative")),
+        "liquidity_usd": _num((p.get("liquidity") or {}).get("usd")),
+        "fdv_usd": _num(p.get("fdv")),
+        "market_cap_usd": _num(p.get("marketCap")),
+        "volume_h24": _num(vol.get("h24")),
+        "volume_h1": _num(vol.get("h1")),
+        "txns_h24": {"buys": (tx.get("h24") or {}).get("buys"),
+                     "sells": (tx.get("h24") or {}).get("sells")},
+        "price_change_h1_pct": _num(chg.get("h1")),
+        "price_change_h6_pct": _num(chg.get("h6")),
+        "price_change_h24_pct": _num(chg.get("h24")),
+        "pair_created_at": p.get("pairCreatedAt"),
+    }
+
+
+def token_price(addresses: str):
+    """Token price + market metrics for up to 3 comma-separated token contract
+    addresses (any chain DexScreener covers), best-liquidity pair each.
+    Source: DexScreener public API."""
+    addrs = [a.strip() for a in str(addresses or "").split(",") if a.strip()][:3]
+    if not addrs:
+        raise ValueError("addresses_required")
+    for a in addrs:
+        if not ADDRESS_RE.match(a):
+            raise ValueError("invalid_evm_address")
+    by_addr: dict[str, list] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+        futs = {ex.submit(_fetch_json_http,
+                          f"{DS_BASE}/token-pairs/v1/base/{a}"): a for a in addrs}
+        for f in concurrent.futures.as_completed(futs):
+            try:
+                ps = f.result()
+            except Exception:
+                ps = None
+            by_addr[futs[f]] = ps or []
+    pairs = [p for a in addrs for p in by_addr.get(a, [])]
+    best: dict[str, dict] = {}
+    order: list[str] = []
+    for p in pairs:
+        base = ((p.get("baseToken") or {}).get("address") or "").lower()
+        if base not in best:
+            order.append(base)
+        cur = best.get(base)
+        if cur is None or (p.get("liquidity") or {}).get("usd", 0) > \
+                (cur.get("liquidity") or {}).get("usd", 0):
+            best[base] = p
+    tokens = []
+    for base in order:
+        row = _ds_pair_row(best[base])
+        if row.get("base_token_address"):
+            tokens.append(row)
+    return {"tokens": tokens, "count": len(tokens), "source": "dexscreener",
+            "as_of": int(_time.time())}
+
+
+def trending_tokens(chain: str = "base", limit: int = 10):
+    """Trending/boosted tokens (DexScreener token boosts), optionally filtered
+    to one chain ('base' default; 'any' for all chains)."""
+    limit = max(1, min(int(limit or 10), 25))
+    chain = (chain or "base").strip().lower()
+
+    def _produce():
+        boosts = _fetch_json_http(f"{DS_BASE}/token-boosts/top/v1") or []
+        addrs: list[str] = []
+        for b in boosts:
+            if chain == "any" or (b.get("chainId") or "").lower() == chain:
+                addrs.append(b.get("tokenAddress"))
+            if len(addrs) >= limit:
+                break
+        boosts = [b for b in boosts if b.get("tokenAddress") in set(addrs)]
+        rows = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
+            futs = {}
+            for b in boosts:
+                a, bc = b.get("tokenAddress"), (b.get("chainId") or "base")
+                if a:
+                    futs[ex.submit(
+                        _fetch_json_http,
+                        f"{DS_BASE}/token-pairs/v1/{bc.lower()}/{a}")] = a
+            for f in concurrent.futures.as_completed(futs):
+                try:
+                    pairs = f.result()
+                except Exception:
+                    pairs = None
+                if pairs:
+                    best_pair = max(pairs,
+                                    key=lambda p: (p.get("liquidity") or {}).get("usd") or 0)
+                    if best_pair.get("pairAddress"):
+                        rows.append(_ds_pair_row(best_pair))
+        rows.sort(key=lambda r: r.get("volume_h24") or 0, reverse=True)
+        return {"trending": rows, "count": len(rows), "chain": chain,
+                "source": "dexscreener-boosts", "as_of": int(_time.time())}
+    return _cached_fetch(f"trend:{chain}:{limit}", 60, _produce)
+
+
+WMO_CODES = {0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+             45: "Fog", 48: "Depositing rime fog", 51: "Light drizzle",
+             53: "Moderate drizzle", 55: "Dense drizzle", 56: "Light freezing drizzle",
+             57: "Dense freezing drizzle", 61: "Slight rain", 63: "Moderate rain",
+             65: "Heavy rain", 66: "Light freezing rain", 67: "Heavy freezing rain",
+             71: "Slight snow", 73: "Moderate snow", 75: "Heavy snow",
+             77: "Snow grains", 80: "Slight rain showers", 81: "Moderate rain showers",
+             82: "Violent rain showers", 85: "Slight snow showers",
+             86: "Heavy snow showers", 95: "Thunderstorm",
+             96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"}
+
+
+def weather_now(city: str):
+    """Current weather + 3-day outlook for a city name (Open-Meteo, free)."""
+    city = (city or "").strip()
+    if not city:
+        raise ValueError("city_required")
+    qs = urllib.parse.urlencode({"name": city, "count": 1,
+                                 "language": "en", "format": "json"})
+    geo = _cached_fetch(f"geo:{city.lower()}", 3600,
+                        lambda: _fetch_json_http(f"{METEO_GEO}?{qs}"))
+    results = (geo or {}).get("results") or []
+    if not results:
+        raise ValueError("city_not_found")
+    place = results[0]
+    lat, lon = place["latitude"], place["longitude"]
+    qs2 = urllib.parse.urlencode({
+        "latitude": lat, "longitude": lon,
+        "current": "temperature_2m,relative_humidity_2m,apparent_temperature,"
+                   "weather_code,wind_speed_10m,wind_direction_10m,pressure_msl",
+        "daily": "temperature_2m_max,temperature_2m_min,weather_code,"
+                 "precipitation_probability_max",
+        "timezone": "auto", "forecast_days": 4})
+    wx = _cached_fetch(f"wx:{round(lat,3)}:{round(lon,3)}", 300,
+                       lambda: _fetch_json_http(f"{METEO_BASE}?{qs2}"))
+    cur = wx.get("current") or {}
+    daily = wx.get("daily") or {}
+    days = []
+    for i, d in enumerate(daily.get("time") or []):
+        if i == 0:
+            continue  # forecast starts tomorrow; current covers today
+        days.append({
+            "date": d,
+            "max_c": (daily.get("temperature_2m_max") or [None])[i],
+            "min_c": (daily.get("temperature_2m_min") or [None])[i],
+            "condition": WMO_CODES.get((daily.get("weather_code") or [None])[i],
+                                       "Unknown"),
+            "precip_probability_max_pct":
+                (daily.get("precipitation_probability_max") or [None])[i],
+        })
+        if len(days) >= 3:
+            break
+
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "city": place.get("name"),
+        "country": place.get("country"),
+        "latitude": lat, "longitude": lon,
+        "timezone": wx.get("timezone"),
+        "current": {
+            "time": cur.get("time"),
+            "temperature_c": _num(cur.get("temperature_2m")),
+            "apparent_temperature_c": _num(cur.get("apparent_temperature")),
+            "humidity_pct": _num(cur.get("relative_humidity_2m")),
+            "wind_speed_kmh": _num(cur.get("wind_speed_10m")),
+            "wind_direction_deg": _num(cur.get("wind_direction_10m")),
+            "pressure_hpa": _num(cur.get("pressure_msl")),
+            "condition": WMO_CODES.get(cur.get("weather_code"), "Unknown"),
+            "weather_code": cur.get("weather_code"),
+        },
+        "forecast_days": days,
+        "source": "open-meteo",
+    }
+
+
+def defi_yields(min_tvl: float = 1_000_000, limit: int = 10, chain: str = ""):
+    """Top DeFi yield pools by APY (DefiLlama yields, public). Filters:
+    min TVL (default $1M), optional single chain. Signals only."""
+
+    def _produce():
+        data = _fetch_json_http(LLAMA_YIELDS)
+        pools = data.get("data") if isinstance(data, dict) else data
+        pools = pools or []
+        rows = []
+        for p in pools:
+            tvl = p.get("tvlUsd") or 0
+            apy = p.get("apy")
+            if tvl < float(min_tvl or 0) or apy is None or apy <= 0 or apy > 150:
+                continue
+            if p.get("outlier"):
+                continue
+            if chain and (p.get("chain") or "").lower() != chain.lower():
+                continue
+            rows.append({
+                "project": p.get("project"),
+                "chain": p.get("chain"),
+                "symbol": p.get("symbol"),
+                "pool_id": p.get("pool"),
+                "apy_total_pct": round(float(apy), 4),
+                "apy_base_pct": (round(float(p["apyBase"]), 4)
+                                 if p.get("apyBase") is not None else None),
+                "apy_reward_pct": (round(float(p["apyReward"]), 4)
+                                   if p.get("apyReward") is not None else None),
+                "tvl_usd": float(tvl),
+                "stablecoin": bool(p.get("stablecoin")),
+                "il_risk": p.get("ilRisk"),
+                "exposure": p.get("exposure"),
+                "apy_mean_30d_pct": p.get("apyMean30d"),
+            })
+        rows.sort(key=lambda r: (r["apy_total_pct"], r["tvl_usd"]), reverse=True)
+        rows = rows[: max(1, min(int(limit or 10), 25))]
+        return rows
+
+    pools = _cached_fetch(
+        f"yields:{min_tvl}:{limit}:{chain.lower()}", 300, _produce)
+    return {"pools": pools, "count": len(pools),
+            "filters": {"min_tvl_usd": float(min_tvl or 0),
+                        "chain": chain.lower() or None},
+            "source": "defillama-yields", "as_of": int(_time.time()),
+            "disclaimer": "Yield snapshots are market signals only, not "
+                          "financial advice and not revenue."}
+
+
+def news_digest(topic: str = "crypto", limit: int = 10):
+    """Headline digest. topic=crypto -> DexScreener profiled-token snapshots
+    (project, headline, website); topic=tech -> Hacker News top stories."""
+    limit = max(1, min(int(limit or 10), 10))
+    topic = (topic or "crypto").strip().lower()
+    if topic == "tech":
+        def _produce():
+            ids = _fetch_json_http(f"{HN_BASE}/topstories.json") or []
+            stories = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+                futs = [ex.submit(_fetch_json_http, f"{HN_BASE}/item/{i}.json")
+                        for i in ids[:limit]]
+                for f in concurrent.futures.as_completed(futs):
+                    try:
+                        it = f.result()
+                    except Exception:
+                        continue
+                    if it and it.get("title"):
+                        stories.append({
+                            "title": it.get("title"),
+                            "url": it.get("url") or
+                                   f"https://news.ycombinator.com/item?id={it.get('id')}",
+                            "source": "hacker-news",
+                            "score": it.get("score"),
+                            "author": it.get("by"),
+                            "published_at": it.get("time"),
+                        })
+            return {"items": stories[:limit], "count": len(stories[:limit]),
+                    "topic": "tech", "source": "hacker-news"}
+        return _cached_fetch(f"news:tech:{limit}", 300, _produce)
+
+    def _crypto():
+        profiles = _fetch_json_http(f"{DS_BASE}/token-profiles/latest/v1") or []
+        items = []
+        for pr in profiles[:limit]:
+            site = None
+            for link in pr.get("links") or []:
+                if link.get("type") == "website" or link.get("label") == "Website":
+                    site = link.get("url")
+                    break
+            if not site and pr.get("links"):
+                site = pr["links"][0].get("url")
+            items.append({
+                "project": pr.get("name") or pr.get("description"),
+                "chain": pr.get("chainId"),
+                "token_address": pr.get("tokenAddress"),
+                "headline": (pr.get("description") or "")[:280],
+                "website": site or pr.get("url"),
+                "source": "dexscreener-profiles",
+            })
+        return {"items": items, "count": len(items), "topic": "crypto",
+                "source": "dexscreener-profiles",
+                "note": "Project snapshots from DexScreener token profiles "
+                        "(editorial-grade data, not scraped headlines)."}
+    return _cached_fetch(f"news:crypto:{limit}", 300, _crypto)

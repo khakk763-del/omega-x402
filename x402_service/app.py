@@ -8,6 +8,11 @@ Python middleware so each priced call settles USDC on Base at call
 time to the TaskMarket burner wallet (payTo). No employer, no pitch,
 no review queue.
 
+2026-10-08 scale-up: five high-utility utility SKUs added (token price,
+trending tokens, weather, DeFi yields, news digest) served from public
+free data sources (DexScreener, Open-Meteo, DefiLlama, Hacker News) via
+the screener module's `bazaar_utils` fetchers. All strictly read-only.
+
 Facilitator: PayAI (https://facilitator.payai.network), no API key —
              unless CDP_API_KEY_ID + CDP_API_KEY_SECRET are set (Phase 2),
              in which case the CDP Facilitator
@@ -305,7 +310,7 @@ def _custom_openapi():
     }
     schema["x-discovery"] = {
         "serviceName": "OMEGA Opportunity Intel",
-        "tags": ["screening", "agents", "x402", "base", "data"],
+        "tags": ["screening", "agents", "x402", "base", "data", "crypto", "weather"],
         "ownershipProofs": [],
     }
     for path, ops in schema.get("paths", {}).items():
@@ -583,6 +588,200 @@ async def guard(request: Request, call_next):
     return await call_next(request)
 
 
+# ---- Bazaar utility SKU schemas (2026-10-08) ----
+_TOKEN_ROW_PROPS = {
+    "pair_address": {"type": ["string", "null"]}, "chain": {"type": ["string", "null"]},
+    "dex": {"type": ["string", "null"]}, "base_token": {"type": ["string", "null"]},
+    "base_token_address": {"type": ["string", "null"]},
+    "quote_token": {"type": ["string", "null"]},
+    "price_usd": {"type": ["number", "null"]}, "price_native": {"type": ["number", "null"]},
+    "liquidity_usd": {"type": ["number", "null"]}, "fdv_usd": {"type": ["number", "null"]},
+    "market_cap_usd": {"type": ["number", "null"]}, "volume_h24": {"type": ["number", "null"]},
+    "volume_h1": {"type": ["number", "null"]},
+    "txns_h24": {"type": "object"}, "price_change_h1_pct": {"type": ["number", "null"]},
+    "price_change_h6_pct": {"type": ["number", "null"]},
+    "price_change_h24_pct": {"type": ["number", "null"]},
+    "pair_created_at": {"type": ["number", "null"]}}
+_TOKEN_ROW_REQUIRED = ["pair_address", "chain", "dex", "base_token", "base_token_address",
+                       "quote_token", "price_usd", "volume_h24"]
+_TOKEN_ROW_EXAMPLE = {
+    "pair_address": "0x0000000000000000000000000000000000000000", "chain": "base",
+    "dex": "uniswap", "base_token": "USDC",
+    "base_token_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "quote_token": "WETH", "price_usd": 1.0, "price_native": 0.0004,
+    "liquidity_usd": 5000000.0, "fdv_usd": None, "market_cap_usd": None,
+    "volume_h24": 1200000.0, "volume_h1": 50000.0,
+    "txns_h24": {"buys": 1200, "sells": 900}, "price_change_h1_pct": 0.1,
+    "price_change_h6_pct": -0.2, "price_change_h24_pct": 0.3, "pair_created_at": None}
+
+_TOKEN_PRICE_OUT_SCHEMA = {"properties": {
+    "tokens": {"type": "array", "items": {"type": "object", "properties": _TOKEN_ROW_PROPS,
+               "required": _TOKEN_ROW_REQUIRED}},
+    "count": {"type": "integer"}, "source": {"type": "string"},
+    "as_of": {"type": "integer"}},
+    "required": ["tokens", "count", "source"]}
+
+_TRENDING_OUT_SCHEMA = {"properties": {
+    "trending": {"type": "array", "items": {"type": "object", "properties": _TOKEN_ROW_PROPS,
+                 "required": _TOKEN_ROW_REQUIRED}},
+    "count": {"type": "integer"}, "chain": {"type": "string"},
+    "source": {"type": "string"}, "as_of": {"type": "integer"}},
+    "required": ["trending", "count", "chain", "source"]}
+
+routes.update({
+    "GET /v1/crypto/token-price": RouteConfig(
+        accepts=_opt("$0.005"),
+        mime_type="application/json",
+        description="Token price + market metrics (price, liquidity, FDV, volume, txns, 1h/6h/24h change) for up to 3 token contract addresses on any DexScreener chain, best pair each. Public data, read-only.",
+        service_name="OMEGA Opportunity Intel",
+        tags=["crypto", "price", "data"],
+        extensions=_bazaar_query(
+            {"addresses": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"},
+            {"type": "object", "properties": {
+                "addresses": {"type": "string"}},
+             "required": ["addresses"]},
+            {"tokens": [_TOKEN_ROW_EXAMPLE], "count": 1, "source": "dexscreener",
+             "as_of": 1791448200},
+            _TOKEN_PRICE_OUT_SCHEMA,
+        ),
+    ),
+    "GET /v1/crypto/trending": RouteConfig(
+        accepts=_opt("$0.01"),
+        mime_type="application/json",
+        description="Trending/boosted tokens (DexScreener boosts), best pair each; chain=base|any, limit 1-25. Public data, read-only.",
+        service_name="OMEGA Opportunity Intel",
+        tags=["crypto", "trending", "data"],
+        extensions=_bazaar_query(
+            {"chain": "base", "limit": 10},
+            {"type": "object", "properties": {
+                "chain": {"type": "string", "enum": ["base", "any"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 25}}},
+            {"trending": [_TOKEN_ROW_EXAMPLE], "count": 1, "chain": "base",
+             "source": "dexscreener-boosts", "as_of": 1791448200},
+            _TRENDING_OUT_SCHEMA,
+        ),
+    ),
+    "GET /v1/weather/current": RouteConfig(
+        accepts=_opt("$0.003"),
+        mime_type="application/json",
+        description="Current weather + 3-day forecast for any city (Open-Meteo, no key).",
+        service_name="OMEGA Opportunity Intel",
+        tags=["weather", "data"],
+        extensions=_bazaar_query(
+            {"city": "Berlin"},
+            {"type": "object", "properties": {
+                "city": {"type": "string"}}, "required": ["city"]},
+            {"city": "Berlin", "country": "Germany", "latitude": 52.52437,
+             "longitude": 13.41053, "timezone": "Europe/Berlin",
+             "current": {"time": "2026-10-08T11:15", "temperature_c": 21.4,
+                         "apparent_temperature_c": 20.1, "humidity_pct": 55,
+                         "wind_speed_kmh": 12.5, "wind_direction_deg": 240,
+                         "pressure_hpa": 1013.2, "condition": "Partly cloudy",
+                         "weather_code": 2},
+             "forecast_days": [{"date": "2026-10-09", "max_c": 22.1, "min_c": 12.3,
+                                "condition": "Partly cloudy",
+                                "precip_probability_max_pct": 20}],
+             "source": "open-meteo"},
+            {"properties": {
+                "city": {"type": "string"}, "country": {"type": ["string", "null"]},
+                "latitude": {"type": "number"}, "longitude": {"type": "number"},
+                "timezone": {"type": ["string", "null"]},
+                "current": {"type": "object", "properties": {
+                    "time": {"type": ["string", "null"]},
+                    "temperature_c": {"type": ["number", "null"]},
+                    "apparent_temperature_c": {"type": ["number", "null"]},
+                    "humidity_pct": {"type": ["number", "null"]},
+                    "wind_speed_kmh": {"type": ["number", "null"]},
+                    "wind_direction_deg": {"type": ["number", "null"]},
+                    "pressure_hpa": {"type": ["number", "null"]},
+                    "condition": {"type": "string"},
+                    "weather_code": {"type": ["integer", "null"]}},
+                    "required": ["condition"]},
+                "forecast_days": {"type": "array", "items": {"type": "object",
+                    "properties": {
+                        "date": {"type": "string"},
+                        "max_c": {"type": ["number", "null"]},
+                        "min_c": {"type": ["number", "null"]},
+                        "condition": {"type": "string"},
+                        "precip_probability_max_pct": {"type": ["number", "null"]}},
+                    "required": ["date", "condition"]}},
+                "source": {"type": "string"}},
+             "required": ["city", "current", "forecast_days", "source"]},
+        ),
+    ),
+    "GET /v1/defi/yields": RouteConfig(
+        accepts=_opt("$0.01"),
+        mime_type="application/json",
+        description="Top DeFi yields by APY (DefiLlama), min-TVL filtered (>= $1M default), optional chain filter. Signals only, not advice.",
+        service_name="OMEGA Opportunity Intel",
+        tags=["defi", "yields", "data"],
+        extensions=_bazaar_query(
+            {"min_tvl": 1000000, "limit": 10},
+            {"type": "object", "properties": {
+                "min_tvl": {"type": "number"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 25},
+                "chain": {"type": "string"}}},
+            {"pools": [{"project": "aave-v3", "chain": "Base", "symbol": "USDC",
+                        "pool_id": "00000000-0000-0000-0000-000000000000",
+                        "apy_total_pct": 4.21, "apy_base_pct": 4.21,
+                        "apy_reward_pct": None, "tvl_usd": 250000000.0,
+                        "stablecoin": True, "il_risk": "no", "exposure": "single",
+                        "apy_mean_30d_pct": 4.05}],
+             "count": 1, "filters": {"min_tvl_usd": 1000000.0, "chain": None},
+             "source": "defillama-yields", "as_of": 1791448200,
+             "disclaimer": "Yield snapshots are market signals only, not financial advice and not revenue."},
+            {"properties": {
+                "pools": {"type": "array", "items": {"type": "object", "properties": {
+                    "project": {"type": ["string", "null"]},
+                    "chain": {"type": ["string", "null"]},
+                    "symbol": {"type": ["string", "null"]},
+                    "pool_id": {"type": ["string", "null"]},
+                    "apy_total_pct": {"type": "number"},
+                    "apy_base_pct": {"type": ["number", "null"]},
+                    "apy_reward_pct": {"type": ["number", "null"]},
+                    "tvl_usd": {"type": "number"},
+                    "stablecoin": {"type": "boolean"},
+                    "il_risk": {"type": ["string", "null"]},
+                    "exposure": {"type": ["string", "null"]},
+                    "apy_mean_30d_pct": {"type": ["number", "null"]}},
+                    "required": ["apy_total_pct", "tvl_usd"]}},
+                "count": {"type": "integer"},
+                "filters": {"type": "object"},
+                "source": {"type": "string"},
+                "as_of": {"type": "integer"},
+                "disclaimer": {"type": "string"}},
+             "required": ["pools", "count", "source", "disclaimer"]},
+        ),
+    ),
+    "GET /v1/news/digest": RouteConfig(
+        accepts=_opt("$0.005"),
+        mime_type="application/json",
+        description="Headline digest: topic=crypto (DexScreener profiled tokens with project links) or topic=tech (Hacker News top stories).",
+        service_name="OMEGA Opportunity Intel",
+        tags=["news", "digest", "data"],
+        extensions=_bazaar_query(
+            {"topic": "crypto", "limit": 10},
+            {"type": "object", "properties": {
+                "topic": {"type": "string", "enum": ["crypto", "tech"]},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 10}}},
+            {"items": [{"project": "Example Token", "chain": "base",
+                        "token_address": "0x0000000000000000000000000000000000000000",
+                        "headline": "Example project headline.",
+                        "website": "https://example.com",
+                        "source": "dexscreener-profiles"}],
+             "count": 1, "topic": "crypto", "source": "dexscreener-profiles",
+             "note": "Project snapshots from DexScreener token profiles (editorial-grade data, not scraped headlines)."},
+            {"properties": {
+                "items": {"type": "array", "items": {"type": "object"}},
+                "count": {"type": "integer"},
+                "topic": {"type": "string"},
+                "source": {"type": "string"},
+                "note": {"type": ["string", "null"]}},
+             "required": ["items", "count", "topic", "source"]},
+        ),
+    ),
+})
+
 # ---- handlers (delegate to the tested screener) ----
 @app.get("/health")
 async def health():
@@ -606,7 +805,12 @@ async def x402_manifest():
             {"url": "/v1/money-flow/latest", "method": "GET", "price": "$0.02"},
             {"url": "/v1/x402/readiness", "method": "POST", "price": "$0.01"},
             {"url": "/v1/csv-json/convert", "method": "POST", "price": "$0.01"},
+            {"url": "/v1/crypto/trending", "method": "GET", "price": "$0.01"},
+            {"url": "/v1/defi/yields", "method": "GET", "price": "$0.01"},
+            {"url": "/v1/crypto/token-price", "method": "GET", "price": "$0.005"},
+            {"url": "/v1/news/digest", "method": "GET", "price": "$0.005"},
             {"url": "/v1/agent/readiness", "method": "GET", "price": "$0.005"},
+            {"url": "/v1/weather/current", "method": "GET", "price": "$0.003"},
             {"url": "/v1/chain/erc20-balance", "method": "GET", "price": "$0.003"},
             {"url": "/v1/chain/block-number", "method": "GET", "price": "$0.001"},
         ],
@@ -684,6 +888,57 @@ async def chain_erc20_balance(address: str, contract: str, network: str = "ether
         return screener.erc20_balance(address, contract, network)
     except ValueError as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
+
+
+# ---- 2026-10-08 bazaar utility SKUs (delegate to screener fetchers) ----
+@app.get("/v1/crypto/token-price")
+async def crypto_token_price(addresses: str):
+    try:
+        return screener.token_price(addresses)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
+
+
+@app.get("/v1/crypto/trending")
+async def crypto_trending(chain: str = "base", limit: int = 10):
+    try:
+        return screener.trending_tokens(chain, limit)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
+
+
+@app.get("/v1/weather/current")
+async def weather_current(city: str):
+    try:
+        return screener.weather_now(city)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
+
+
+@app.get("/v1/defi/yields")
+async def defi_yields_top(min_tvl: float = 1000000, limit: int = 10, chain: str = ""):
+    try:
+        return screener.defi_yields(min_tvl, limit, chain)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
+
+
+@app.get("/v1/news/digest")
+async def news_digest_route(topic: str = "crypto", limit: int = 10):
+    try:
+        return screener.news_digest(topic, limit)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
 
 
 if __name__ == "__main__":

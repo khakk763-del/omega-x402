@@ -78,7 +78,13 @@ before changing anything — do not redeploy blindly.
    first mainnet settle via CDP auto-indexes the service in the CDP
    Bazaar. Keys live in the secure store, never in this repo or chat.
    Verify after the env deploy: `GET /health` shows
-   `"facilitator": "cdp"`.
+   `"facilitator": "cdp"`. **Status: LIVE since 2026-10-08 ~08:30 UTC**
+   (verified `/health` → `"facilitator": "cdp"`).
+3. SKU scale-up (2026-10-08): five bazaar utility SKUs added —
+   `/v1/crypto/token-price` ($0.005), `/v1/crypto/trending` ($0.01),
+   `/v1/weather/current` ($0.003), `/v1/defi/yields` ($0.01),
+   `/v1/news/digest` ($0.005) — all read-only from public keyless data
+   (DexScreener, Open-Meteo, DefiLlama, Hacker News).
 
 ## Free-tier caveats (expected behaviour, not bugs)
 
