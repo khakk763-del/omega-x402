@@ -59,3 +59,32 @@ class OpportunityIntelligenceTests(unittest.TestCase):
             service.x402_readiness("http://example.com/paid", fetcher=lambda url: {"status":402,"headers":{},"body":b"{}"})
 
 if __name__ == "__main__": unittest.main()
+
+
+class DdSkuTests(unittest.TestCase):
+    def test_score_token_risk_honeypot_extreme(self):
+        sec = {"is_honeypot": "1", "buy_tax": "0.3", "sell_tax": "0.3",
+               "is_open_source": "0", "owner_address": "", "holders": [],
+               "is_proxy": "0"}
+        score, flags = service.score_token_risk(sec, None, None)
+        codes = {f["flag"] for f in flags}
+        self.assertIn("honeypot_flag", codes)
+        self.assertIn("extreme_tax", codes)
+        self.assertEqual(score, 100)  # capped
+
+    def test_score_token_risk_clean_low(self):
+        sec = {"is_honeypot": "0", "buy_tax": "0", "sell_tax": "0",
+               "is_open_source": "1",
+               "owner_address": "0x0000000000000000000000000000000000000000",
+               "holders": [{"percent": "0.05"}] * 10,
+               "is_proxy": "0"}
+        market = {"liquidity_usd": 5_000_000}
+        score, flags = service.score_token_risk(sec, market, 300.0)
+        self.assertLess(score, 25)
+
+    def test_dd_chain_validation(self):
+        with self.assertRaises(ValueError):
+            service.token_due_diligence(
+                "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "solana")
+        with self.assertRaises(ValueError):
+            service.address_intel("not-an-address")

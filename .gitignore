@@ -12,3 +12,4 @@ x402_service/proof_payer_key.tmp
 *.secret
 *.log
 x402_service/current_public_url.txt
+.venv-x402/

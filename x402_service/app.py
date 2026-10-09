@@ -498,7 +498,7 @@ routes = {
         ),
     ),
     "GET /v1/money-flow/latest": RouteConfig(
-        accepts=_opt("$0.02"),
+        accepts=_opt("$0.03"),
         mime_type="application/json",
         description="Latest money-flow snapshot: stablecoin and chain TVL signals with sources. Market signals only, not demand proof or revenue.",
         service_name="OMEGA Opportunity Intel",
@@ -517,24 +517,6 @@ routes = {
                 "global_market": {"type": ["object", "null"]},
                 "disclaimer": {"type": "string"}},
              "required": ["status", "sources", "top_chains", "stablecoins", "disclaimer"]},
-        ),
-    ),
-    "GET /v1/chain/block-number": RouteConfig(
-        accepts=_opt("$0.001"),
-        mime_type="application/json",
-        description="Current block number for a supported EVM network (read-only chain call).",
-        service_name="OMEGA Opportunity Intel",
-        tags=["chain", "evm", "data"],
-        extensions=_bazaar_query(
-            {"network": "ethereum"},
-            {"type": "object", "properties": {
-                "network": {"type": "string", "enum": ["ethereum"]}}},
-            {"network": "ethereum", "result": "0x1715f90", "block_number": 24207248},
-            {"properties": {
-                "network": {"type": "string"},
-                "result": {"type": "string"},
-                "block_number": {"type": "integer"}},
-             "required": ["network", "result", "block_number"]},
         ),
     ),
     "GET /v1/chain/erc20-balance": RouteConfig(
@@ -569,7 +551,8 @@ routes = {
     ),
 }
 
-app.add_middleware(PaymentMiddlewareASGI, routes=routes, server=resource_server)
+# payment gate registered after all routes.update() blocks below
+_PAYMENT_GATE_DEFERRED = True
 
 
 # ---- abuse controls: kill switch + rate limit + body cap (run before payment gate) ----
@@ -630,7 +613,7 @@ _TRENDING_OUT_SCHEMA = {"properties": {
 
 routes.update({
     "GET /v1/crypto/token-price": RouteConfig(
-        accepts=_opt("$0.005"),
+        accepts=_opt("$0.01"),
         mime_type="application/json",
         description="Token price + market metrics (price, liquidity, FDV, volume, txns, 1h/6h/24h change) for up to 3 token contract addresses on any DexScreener chain, best pair each. Public data, read-only.",
         service_name="OMEGA Opportunity Intel",
@@ -646,7 +629,7 @@ routes.update({
         ),
     ),
     "GET /v1/crypto/trending": RouteConfig(
-        accepts=_opt("$0.01"),
+        accepts=_opt("$0.02"),
         mime_type="application/json",
         description="Trending/boosted tokens (DexScreener boosts), best pair each; chain=base|any, limit 1-25. Public data, read-only.",
         service_name="OMEGA Opportunity Intel",
@@ -659,54 +642,6 @@ routes.update({
             {"trending": [_TOKEN_ROW_EXAMPLE], "count": 1, "chain": "base",
              "source": "dexscreener-boosts", "as_of": 1791448200},
             _TRENDING_OUT_SCHEMA,
-        ),
-    ),
-    "GET /v1/weather/current": RouteConfig(
-        accepts=_opt("$0.003"),
-        mime_type="application/json",
-        description="Current weather + 3-day forecast for any city (Open-Meteo, no key).",
-        service_name="OMEGA Opportunity Intel",
-        tags=["weather", "data"],
-        extensions=_bazaar_query(
-            {"city": "Berlin"},
-            {"type": "object", "properties": {
-                "city": {"type": "string"}}, "required": ["city"]},
-            {"city": "Berlin", "country": "Germany", "latitude": 52.52437,
-             "longitude": 13.41053, "timezone": "Europe/Berlin",
-             "current": {"time": "2026-10-08T11:15", "temperature_c": 21.4,
-                         "apparent_temperature_c": 20.1, "humidity_pct": 55,
-                         "wind_speed_kmh": 12.5, "wind_direction_deg": 240,
-                         "pressure_hpa": 1013.2, "condition": "Partly cloudy",
-                         "weather_code": 2},
-             "forecast_days": [{"date": "2026-10-09", "max_c": 22.1, "min_c": 12.3,
-                                "condition": "Partly cloudy",
-                                "precip_probability_max_pct": 20}],
-             "source": "open-meteo"},
-            {"properties": {
-                "city": {"type": "string"}, "country": {"type": ["string", "null"]},
-                "latitude": {"type": "number"}, "longitude": {"type": "number"},
-                "timezone": {"type": ["string", "null"]},
-                "current": {"type": "object", "properties": {
-                    "time": {"type": ["string", "null"]},
-                    "temperature_c": {"type": ["number", "null"]},
-                    "apparent_temperature_c": {"type": ["number", "null"]},
-                    "humidity_pct": {"type": ["number", "null"]},
-                    "wind_speed_kmh": {"type": ["number", "null"]},
-                    "wind_direction_deg": {"type": ["number", "null"]},
-                    "pressure_hpa": {"type": ["number", "null"]},
-                    "condition": {"type": "string"},
-                    "weather_code": {"type": ["integer", "null"]}},
-                    "required": ["condition"]},
-                "forecast_days": {"type": "array", "items": {"type": "object",
-                    "properties": {
-                        "date": {"type": "string"},
-                        "max_c": {"type": ["number", "null"]},
-                        "min_c": {"type": ["number", "null"]},
-                        "condition": {"type": "string"},
-                        "precip_probability_max_pct": {"type": ["number", "null"]}},
-                    "required": ["date", "condition"]}},
-                "source": {"type": "string"}},
-             "required": ["city", "current", "forecast_days", "source"]},
         ),
     ),
     "GET /v1/defi/yields": RouteConfig(
@@ -754,7 +689,7 @@ routes.update({
         ),
     ),
     "GET /v1/news/digest": RouteConfig(
-        accepts=_opt("$0.005"),
+        accepts=_opt("$0.01"),
         mime_type="application/json",
         description="Headline digest: topic=crypto (DexScreener profiled tokens with project links) or topic=tech (Hacker News top stories).",
         service_name="OMEGA Opportunity Intel",
@@ -782,6 +717,190 @@ routes.update({
     ),
 })
 
+# ---- 2026-10-09 DD SKUs (N1/N2/N4) ----
+_DD_TOKEN_OUT_SCHEMA = {"properties": {
+    "address": {"type": "string"}, "chain": {"type": "string"},
+    "token": {"type": "object", "properties": {
+        "name": {"type": ["string", "null"]}, "symbol": {"type": ["string", "null"]},
+        "total_supply": {"type": ["string", "number", "null"]},
+        "holder_count": {"type": ["string", "number", "null"]}},
+        "required": []},
+    "risk_score": {"type": "integer"}, "risk_level": {"type": "string"},
+    "risk_flags": {"type": "array", "items": {"type": "object", "properties": {
+        "flag": {"type": "string"}, "detail": {"type": "string"},
+        "severity_points": {"type": "integer"}},
+        "required": ["flag", "detail"]}},
+    "security": {"type": "object"},
+    "holders": {"type": "object", "properties": {
+        "top10_share_pct": {"type": ["number", "null"]},
+        "top_holders": {"type": "array", "items": {"type": "object"}}}},
+    "market": {"type": ["object", "null"]},
+    "pair_age_days": {"type": ["number", "null"]},
+    "llama_price_usd": {"type": ["number", "null"]},
+    "sources": {"type": "array", "items": {"type": "string"}},
+    "as_of": {"type": "integer"}, "disclaimer": {"type": "string"}},
+    "required": ["address", "chain", "risk_score", "risk_level", "risk_flags",
+                 "security", "disclaimer"]}
+
+_DD_CONTRACT_OUT_SCHEMA = {"properties": {
+    "address": {"type": "string"}, "chain": {"type": "string"},
+    "verified_source": {"type": ["boolean", "null"]},
+    "is_proxy": {"type": "boolean"},
+    "implementations": {"type": "array", "items": {"type": "object", "properties": {
+        "name": {"type": ["string", "null"]}, "address": {"type": ["string", "null"]}}}},
+    "owner_control": {"type": "string"},
+    "owner_address": {"type": ["string", "null"]},
+    "honeypot": {"type": "object", "properties": {
+        "is_honeypot": {"type": ["boolean", "null"]},
+        "simulation_success": {"type": ["boolean", "null"]},
+        "buy_tax": {"type": ["number", "null"]},
+        "sell_tax": {"type": ["number", "null"]},
+        "transfer_tax": {"type": ["number", "null"]},
+        "flags": {"type": "array", "items": {"type": "string"}}}},
+    "goplus": {"type": "object"},
+    "blockscout": {"type": ["object", "null"]},
+    "risk_flags": {"type": "array", "items": {"type": "object", "properties": {
+        "level": {"type": "string"}, "flag": {"type": "string"},
+        "detail": {"type": "string"}}, "required": ["level", "flag", "detail"]}},
+    "sources": {"type": "array", "items": {"type": "string"}},
+    "source_errors": {"type": "array", "items": {"type": "string"}},
+    "as_of": {"type": "integer"}, "disclaimer": {"type": "string"}},
+    "required": ["address", "chain", "is_proxy", "owner_control", "risk_flags",
+                 "disclaimer"]}
+
+_ADDR_INTEL_OUT_SCHEMA = {"properties": {
+    "address": {"type": "string"},
+    "ens": {"type": ["object", "null"], "properties": {
+        "name": {"type": ["string", "null"]},
+        "display_name": {"type": ["string", "null"]},
+        "avatar": {"type": ["string", "null"]}}},
+    "is_contract": {"type": ["boolean", "null"]},
+    "account": {"type": ["object", "null"]},
+    "creation": {"type": ["object", "null"]},
+    "goplus_risk_signals": {"type": ["object", "null"]},
+    "goplus_risk_flag_count": {"type": "integer"},
+    "usdc_balance_base": {"type": ["object", "null"], "properties": {
+        "balance": {"type": ["string", "null"]},
+        "decimals": {"type": ["integer", "null"]},
+        "symbol": {"type": ["string", "null"]}}},
+    "sources": {"type": "array", "items": {"type": "string"}},
+    "source_errors": {"type": "array", "items": {"type": "string"}},
+    "as_of": {"type": "integer"}, "disclaimer": {"type": "string"}},
+    "required": ["address", "goplus_risk_flag_count", "disclaimer"]}
+
+_DD_EXAMPLE_FLAG = {"flag": "moderate_liquidity",
+                    "detail": "best-pair liquidity $143,071", "severity_points": 4}
+
+routes.update({
+    "GET /v1/dd/token": RouteConfig(
+        accepts=_opt("$0.10"),
+        mime_type="application/json",
+        description="Wallet/token due-diligence snapshot: GoPlus security fields (honeypot, tax, proxy, open-source, owner, holders), DexScreener market metrics and a DefiLlama price cross-check composed into one 0-100 risk score with factual flags. Flags only — not investment advice, not a safety guarantee.",
+        service_name="OMEGA Opportunity Intel",
+        tags=["due-diligence", "token", "risk", "security"],
+        extensions=_bazaar_query(
+            {"address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "chain": "base"},
+            {"type": "object", "properties": {
+                "address": {"type": "string", "pattern": _EVM_ADDRESS_PATTERN},
+                "chain": {"type": "string", "enum": ["base", "ethereum"]}},
+             "required": ["address"]},
+            {"address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+             "chain": "base",
+             "token": {"name": "USD Coin", "symbol": "USDC",
+                       "total_supply": "4382665243.422965",
+                       "holder_count": "11031440"},
+             "risk_score": 13, "risk_level": "low",
+             "risk_flags": [_DD_EXAMPLE_FLAG],
+             "security": {"is_honeypot": False, "buy_tax": 0.0, "sell_tax": 0.0,
+                          "cannot_buy": False, "is_open_source": True,
+                          "is_proxy": True,
+                          "owner_address": "0x0000000000000000000000000000000000000000",
+                          "owner_control": "owner_retained",
+                          "creator_address": None, "creator_percent": None,
+                          "honeypot_with_same_creator": False,
+                          "in_trust_list": False, "in_cex": False},
+             "holders": {"top10_share_pct": 27.37, "top_holders": []},
+             "market": _TOKEN_ROW_EXAMPLE, "pair_age_days": 400.5,
+             "llama_price_usd": 0.9996,
+             "sources": ["goplus-token-security", "dexscreener", "defillama-coins"],
+             "as_of": 1791448200,
+             "disclaimer": "Observable on-chain flags and market metrics only; a low score is not a safety guarantee and this is not investment advice."},
+            _DD_TOKEN_OUT_SCHEMA,
+        ),
+    ),
+    "GET /v1/dd/contract": RouteConfig(
+        accepts=_opt("$0.05"),
+        mime_type="application/json",
+        description="Contract risk flags: Blockscout source verification + proxy/implementation detection, Honeypot.is live buy/sell simulation, and GoPlus security fields normalised into a plain-language flag list. Not a safety guarantee.",
+        service_name="OMEGA Opportunity Intel",
+        tags=["due-diligence", "contract", "risk", "security"],
+        extensions=_bazaar_query(
+            {"address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "chain": "base"},
+            {"type": "object", "properties": {
+                "address": {"type": "string", "pattern": _EVM_ADDRESS_PATTERN},
+                "chain": {"type": "string", "enum": ["base", "ethereum"]}},
+             "required": ["address"]},
+            {"address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+             "chain": "base", "verified_source": True, "is_proxy": True,
+             "implementations": [{"name": "FiatTokenV2_2",
+                                  "address": "0x2Ce6311ddAE708829bc0784C967b7d77D19FD779"}],
+             "owner_control": "owner_retained",
+             "owner_address": "0x0000000000000000000000000000000000000000",
+             "honeypot": {"is_honeypot": False, "simulation_success": True,
+                          "buy_tax": 0, "sell_tax": 0, "transfer_tax": 0,
+                          "flags": []},
+             "goplus": {"is_honeypot": False, "buy_tax": 0.0, "sell_tax": 0.0,
+                        "is_open_source": True, "is_proxy": True,
+                        "cannot_buy": False},
+             "blockscout": {"is_verified": True, "name": "FiatTokenProxy",
+                            "compiler_version": "v0.6.12+commit.27d51765",
+                            "is_proxy": True,
+                            "implementations": [{"name": "FiatTokenV2_2",
+                                                 "address": "0x2Ce6311ddAE708829bc0784C967b7d77D19FD779"}]},
+             "risk_flags": [{"level": "info", "flag": "source_verification",
+                             "detail": "source code verified on Blockscout"}],
+             "sources": ["goplus-token-security", "honeypot-is", "blockscout"],
+             "source_errors": [], "as_of": 1791448200,
+             "disclaimer": "Observable contract flags from public security APIs; absence of flags is not a safety guarantee and this is not investment advice."},
+            _DD_CONTRACT_OUT_SCHEMA,
+        ),
+    ),
+    "GET /v1/chain/address-intel": RouteConfig(
+        accepts=_opt("$0.03"),
+        mime_type="application/json",
+        description="ENS / address intelligence for counterparty screening: ENS reverse resolution, Blockscout account facts (contract-vs-EOA, creation, balances), GoPlus address-risk signals, and the address's Base-USDC balance. Public signals only.",
+        service_name="OMEGA Opportunity Intel",
+        tags=["ens", "address", "intel", "screening"],
+        extensions=_bazaar_query(
+            {"address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"},
+            {"type": "object", "properties": {
+                "address": {"type": "string", "pattern": _EVM_ADDRESS_PATTERN}},
+             "required": ["address"]},
+            {"address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+             "ens": {"name": "vitalik.eth", "display_name": "vitalik.eth",
+                     "avatar": "https://metadata.ens.domains/mainnet/avatar/vitalik.eth"},
+             "is_contract": True,
+             "account": {"name": None, "is_verified": True, "tx_count": None,
+                         "token_transfers_count": None,
+                         "coin_balance_wei": "5768184715803065014",
+                         "exchange_rate_usd": "2497.63"},
+             "creation": {"creator_address": None, "creation_tx": None},
+             "goplus_risk_signals": {"phishing_activities": False},
+             "goplus_risk_flag_count": 0,
+             "usdc_balance_base": {"balance": "44783666", "decimals": 6,
+                                   "symbol": "USDC"},
+             "sources": ["ensideas", "blockscout", "goplus-address-security",
+                         "base-rpc"],
+             "source_errors": [], "as_of": 1791448200,
+             "disclaimer": "Public counterparty-screening signals only; risk flags summarise GoPlus observations and are not a judgement of any person."},
+            _ADDR_INTEL_OUT_SCHEMA,
+        ),
+    ),
+})
+
+app.add_middleware(PaymentMiddlewareASGI, routes=routes, server=resource_server)
+
+
 # ---- handlers (delegate to the tested screener) ----
 @app.get("/health")
 async def health():
@@ -802,17 +921,18 @@ async def x402_manifest():
         "resources": [
             {"url": "/v1/evaluate-opportunity", "method": "POST", "price": "$0.05"},
             {"url": "/v1/evaluate-agent-terms", "method": "POST", "price": "$0.03"},
-            {"url": "/v1/money-flow/latest", "method": "GET", "price": "$0.02"},
+            {"url": "/v1/money-flow/latest", "method": "GET", "price": "$0.03"},
             {"url": "/v1/x402/readiness", "method": "POST", "price": "$0.01"},
             {"url": "/v1/csv-json/convert", "method": "POST", "price": "$0.01"},
-            {"url": "/v1/crypto/trending", "method": "GET", "price": "$0.01"},
+            {"url": "/v1/crypto/trending", "method": "GET", "price": "$0.02"},
             {"url": "/v1/defi/yields", "method": "GET", "price": "$0.01"},
-            {"url": "/v1/crypto/token-price", "method": "GET", "price": "$0.005"},
-            {"url": "/v1/news/digest", "method": "GET", "price": "$0.005"},
+            {"url": "/v1/crypto/token-price", "method": "GET", "price": "$0.01"},
+            {"url": "/v1/news/digest", "method": "GET", "price": "$0.01"},
             {"url": "/v1/agent/readiness", "method": "GET", "price": "$0.005"},
-            {"url": "/v1/weather/current", "method": "GET", "price": "$0.003"},
             {"url": "/v1/chain/erc20-balance", "method": "GET", "price": "$0.003"},
-            {"url": "/v1/chain/block-number", "method": "GET", "price": "$0.001"},
+            {"url": "/v1/dd/token", "method": "GET", "price": "$0.10"},
+            {"url": "/v1/dd/contract", "method": "GET", "price": "$0.05"},
+            {"url": "/v1/chain/address-intel", "method": "GET", "price": "$0.03"},
         ],
     }
 
@@ -935,6 +1055,37 @@ async def defi_yields_top(min_tvl: float = 1000000, limit: int = 10, chain: str 
 async def news_digest_route(topic: str = "crypto", limit: int = 10):
     try:
         return screener.news_digest(topic, limit)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
+
+
+# ---- 2026-10-09 DD SKU handlers (delegate to screener fetchers) ----
+@app.get("/v1/dd/token")
+async def dd_token(address: str, chain: str = "base"):
+    try:
+        return screener.token_due_diligence(address, chain)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
+
+
+@app.get("/v1/dd/contract")
+async def dd_contract(address: str, chain: str = "base"):
+    try:
+        return screener.contract_risk(address, chain)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except Exception:
+        return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
+
+
+@app.get("/v1/chain/address-intel")
+async def chain_address_intel(address: str):
+    try:
+        return screener.address_intel(address)
     except ValueError as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
     except Exception:

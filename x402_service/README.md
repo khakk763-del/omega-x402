@@ -58,14 +58,17 @@ anything and does not create demand.
 | POST /v1/x402/readiness | $0.01 | x402 readiness audit of a public HTTPS endpoint |
 | POST /v1/csv-json/convert | $0.01 | CSV↔JSON conversion (mode csv2json/json2csv) |
 | GET /v1/agent/readiness?url= | $0.005 | public x402-readiness probe (SSRF-safe, 5s, never pays) |
-| GET /v1/money-flow/latest | $0.02 | money-flow snapshot (signals only) |
-| GET /v1/crypto/trending?chain&limit | $0.01 | DexScreener boosted/trending tokens, best pair each |
+| GET /v1/money-flow/latest | $0.03 | money-flow snapshot (signals only) |
+| GET /v1/crypto/trending?chain&limit | $0.02 | DexScreener boosted/trending tokens, best pair each |
 | GET /v1/defi/yields?min_tvl&limit&chain | $0.01 | top DeFi yields by APY (DefiLlama, TVL-filtered) |
-| GET /v1/crypto/token-price?addresses= | $0.005 | token price + metrics for ≤3 token addresses |
-| GET /v1/news/digest?topic&limit | $0.005 | crypto token-profile digest or Hacker News top stories |
-| GET /v1/weather/current?city= | $0.003 | current weather + 3-day forecast (Open-Meteo) |
+| GET /v1/crypto/token-price?addresses= | $0.01 | token price + metrics for ≤3 token addresses |
+| GET /v1/news/digest?topic&limit | $0.01 | crypto token-profile digest or Hacker News top stories |
+| GET /v1/weather/current?city= | free (retired from paid catalog 2026-10-09) | current weather + 3-day forecast (Open-Meteo) |
 | GET /v1/chain/erc20-balance | $0.003 | ERC-20 balance/decimals/symbol (read-only) |
-| GET /v1/chain/block-number | $0.001 | EVM block number (read-only) |
+| GET /v1/chain/block-number | free (retired from paid catalog 2026-10-09) | EVM block number (read-only) |
+| GET /v1/dd/token?address=&chain= | $0.10 | wallet/token due-diligence snapshot: GoPlus security + DexScreener market + DefiLlama price, 0-100 risk score with factual flags |
+| GET /v1/dd/contract?address=&chain= | $0.05 | contract risk flags: Blockscout verification/proxy + Honeypot.is simulation + GoPlus, plain-language flag list |
+| GET /v1/chain/address-intel?address= | $0.03 | ENS/address intelligence: ENS reverse, Blockscout account facts, GoPlus address-risk signals, Base-USDC balance |
 
 ### Bazaar utility SKUs (2026-10-08 scale-up)
 
@@ -142,3 +145,28 @@ export NODE_USE_ENV_PROXY=1 NODE_OPTIONS=--use-env-proxy
 Income counts only when USDC settles in the burner wallet; from there it
 withdraws to Khalid's confirmed Base address (`0x8b77…43dC`) via the
 registered withdrawal address.
+
+### DD SKUs (2026-10-09 upgrade)
+
+Verdict-grade due-diligence calls in the $0.03–$0.10 band, all from free
+keyless upstreams (GoPlus token/address security, Honeypot.is v2,
+Blockscout v2, ENSIdeas, DefiLlama coins), hard-timeouted (≤8 s), cached
+2 min, honest 502 on upstream failure:
+
+- **N1 `GET /v1/dd/token` ($0.10)** — one-call token DD: honeypot/tax/
+  proxy/open-source/owner/holder-concentration flags + best-pair
+  liquidity/pair age + price cross-check, composed into a deterministic
+  0–100 risk score. Flags only; explicitly not investment advice.
+- **N2 `GET /v1/dd/contract` ($0.05)** — contract-mechanics pre-flight:
+  verified source?, proxy/implementations, owner control, honeypot
+  simulation result, normalised flag list.
+- **N4 `GET /v1/chain/address-intel` ($0.03)** — counterparty screening:
+  ENS name/avatar, contract-vs-EOA, creation facts, GoPlus risk signals,
+  Base-USDC balance line.
+
+Also in this upgrade: money-flow repriced $0.02→$0.03, trending
+$0.01→$0.02, token-price $0.005→$0.01, news-digest $0.005→$0.01;
+block-number and weather retired from the paid catalog/manifest (routes
+kept as free utility endpoints). Base USDC balance reads now use the
+publicnode Base RPC (mainnet.base.org rate-limits unauthenticated
+eth_call bursts from some egress IPs).
