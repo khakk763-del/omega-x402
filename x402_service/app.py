@@ -1177,6 +1177,15 @@ real.</p>
 <li>Revisions: agree on how many rounds are included before anyone starts.</li>
 </ul>
 
+<h2>What to send with the brief</h2>
+<p>Three attachments save a round of questions: a link to the exact product
+page the video promotes (not your homepage), one customer review or message
+that captures why people buy, in their words, and any compliance lines your
+category requires — health, finance, and children's products all have them.
+If filming involves a physical product, say upfront whether it ships to the
+creator and who covers it; a script written for a product the creator cannot
+hold is a different, weaker script.</p>
+
 <h2>The short version</h2>
 <p>Audience in one sentence. Product truth, including its limits. One hook
 angle. One proof moment. One call to action. A deliverable spec an editor
@@ -1225,6 +1234,14 @@ is selling you the guarantee, not the outcome.</p>
 can do more harm than one good article a week for a month. Whatever your
 cadence, keep a human read-through between delivery and publication; it is
 the cheapest quality control there is.</p>
+
+<h2>One rewrite is normal; three is a brief problem</h2>
+<p>Expect to send back small fixes — a product detail corrected, a heading
+sharpened, a paragraph cut. That is the process working. But if the third
+draft still misses, the cause is almost always upstream: the intent was never
+named, the claims list was never shared, or the outline was approved without
+being read. Fix the brief, not the writer, and the next order usually lands
+in one pass.</p>
 
 <h2>The acceptance test</h2>
 <p>Before approving a delivery, read the article once as your own customer.
@@ -1296,6 +1313,14 @@ keys and sheet IDs, a test lead you can run safely, and a setup guide that
 assumes you are seeing n8n for the first time. You should never need to share
 your passwords with anyone to get a workflow installed — if a seller asks
 for them, that is your answer about the seller.</p>
+
+<h2>How you know it is working</h2>
+<p>You do not need a dashboard to judge a follow-up chain. Watch three
+numbers for a month: how many leads arrived, how many got a first response
+within an hour, and how many got all three follow-ups when they did not
+reply. If the first number is real and the other two are close to all of
+them, the system is doing its job — and any remaining problem is your offer
+or your traffic, not your follow-up.</p>
 
 <h2>Where to start this week</h2>
 <p>Capture, score, instant first response, hot-lead alert, three scheduled
