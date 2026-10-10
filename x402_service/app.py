@@ -1241,7 +1241,9 @@ sharpened, a paragraph cut. That is the process working. But if the third
 draft still misses, the cause is almost always upstream: the intent was never
 named, the claims list was never shared, or the outline was approved without
 being read. Fix the brief, not the writer, and the next order usually lands
-in one pass.</p>
+in one pass. If several writers in a row miss the same way, treat that as
+data about the brief too — the market is telling you the instructions, not
+the people, need the edit.</p>
 
 <h2>The acceptance test</h2>
 <p>Before approving a delivery, read the article once as your own customer.
