@@ -1092,6 +1092,267 @@ async def chain_address_intel(address: str):
         return JSONResponse(status_code=502, content={"error": "upstream_unavailable"})
 
 
+# ---- 2026-10-10 public blog (free, unpriced; owned-media for writing services) ----
+from fastapi.responses import HTMLResponse
+
+_BLOG_CSS = (
+    "body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;"
+    "max-width:760px;margin:2rem auto;padding:0 1rem;line-height:1.65;color:#1a1a1a}"
+    "a{color:#0b5fff}h1{line-height:1.25}h2{margin-top:1.8rem}"
+    ".cta{background:#f4f7ff;border:1px solid #d6e2ff;border-radius:10px;"
+    "padding:1rem 1.2rem;margin:2rem 0}"
+    ".note{color:#555;font-size:.92rem}ul{padding-left:1.2rem}"
+)
+
+
+def _blog_page(title: str, description: str, body: str) -> HTMLResponse:
+    html = (
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        f"<title>{title}</title>"
+        f"<meta name=\"description\" content=\"{description}\">"
+        f"<style>{_BLOG_CSS}</style></head><body>"
+        f"{body}"
+        "<p class=\"note\"><a href=\"/blog\">All articles</a> &middot; "
+        "<a href=\"/\">OMEGA Opportunity Intel</a></p>"
+        "</body></html>"
+    )
+    return HTMLResponse(content=html)
+
+
+_BLOG_POSTS = {
+    "brief-a-ugc-script-that-converts": {
+        "title": "How to Brief a UGC Script That Converts",
+        "description": "A practical buyer guide: what to put in a UGC ad script brief so the first three seconds, the proof, and the call to action actually work together.",
+        "gig_url": "http://www.fiverr.com/s/X00Nqqm",
+        "gig_label": "Order a UGC script pack on Fiverr",
+        "body": """
+<h1>How to Brief a UGC Script That Converts</h1>
+<p>Most UGC ads do not fail in the edit. They fail in the brief. When a creator
+receives a vague product description and a request to "make it engaging", the
+result is a video that sounds like everyone else's. A good brief takes ten
+minutes to write and removes almost all of the guesswork. Here is what to
+include, in the order a scriptwriter actually uses it.</p>
+
+<h2>1. Say who the video is for, in one sentence</h2>
+<p>"Busy parents who cook at home on weeknights" beats "everyone aged 25-45".
+The hook, the vocabulary, and even the filming location all change with the
+audience. If your product has two very different audiences, ask for two scripts
+instead of one compromise.</p>
+
+<h2>2. Give the product truth, not the product pitch</h2>
+<p>Scriptwriters need the honest version: what the product does, what it does
+not do, where it is weaker than a competitor, and the one detail customers
+mention after buying. Real specifics — a battery that lasts a weekend trip, a
+lid that does not leak in a gym bag — are what make a script sound lived-in
+instead of invented. Never ask a writer to claim results you cannot stand
+behind; reviewers and customers spot it instantly.</p>
+
+<h2>3. Pick one hook angle, and say why</h2>
+<p>The first three seconds decide whether anyone hears the rest. Choose the
+angle deliberately: a problem the viewer already has, a surprising result, a
+common mistake, or a direct question. If you have run ads before, say which
+angle performed best for you. If you have not, ask the writer to propose two
+hook options before writing the full script — hooks are cheap to test, full
+reshoots are not.</p>
+
+<h2>4. Specify the proof moment</h2>
+<p>Every converting script has a moment where the product proves itself on
+camera: a before-and-after, a side-by-side, a timer, a close-up of the one
+feature text cannot describe. Name that moment in the brief, or ask the writer
+to design one that a creator can film with a phone and no special equipment.</p>
+
+<h2>5. Lock the call to action</h2>
+<p>One video, one action. "Tap the link to see the sizes" and "follow for part
+two" are different videos. Tell the writer exactly which action matters and
+where the viewer lands after tapping, so the final line can point at something
+real.</p>
+
+<h2>6. Define the deliverable like an editor, not a fan</h2>
+<ul>
+<li>Length: 30-45 seconds is the working range for most short-form ads; say if you need 15 or 60.</li>
+<li>Format of the script: spoken lines, on-screen text, and a simple shot list are the useful trio.</li>
+<li>Platform: TikTok, Reels, and Shorts reward slightly different pacing — name the primary one.</li>
+<li>Variants: ask for alternate hooks and captions in the same pack; they cost little and extend the life of one filming session.</li>
+<li>Revisions: agree on how many rounds are included before anyone starts.</li>
+</ul>
+
+<h2>The short version</h2>
+<p>Audience in one sentence. Product truth, including its limits. One hook
+angle. One proof moment. One call to action. A deliverable spec an editor
+could execute without a follow-up call. Briefs written this way come back as
+scripts that sound like a person recommending something they understand —
+because the writer finally does.</p>
+""",
+    },
+    "seo-articles-that-read-well-and-rank": {
+        "title": "SEO Articles That Read Well and Rank: A Buyer Checklist",
+        "description": "Before you order an SEO article, use this checklist: intent match, outline approval, clean structure, honest claims, and a publish-ready file you do not have to rewrite.",
+        "gig_url": "https://www.fiverr.com/khaled7754/write-an-seo-blog-article-that-reads-well-and-ranks",
+        "gig_label": "Order an SEO blog article on Fiverr",
+        "body": """
+<h1>SEO Articles That Read Well and Rank: A Buyer Checklist</h1>
+<p>Ordering SEO content is easy. Ordering SEO content you can actually publish
+is the hard part. The difference is rarely the writer's talent — it is whether
+the brief and the acceptance criteria were clear before the first word was
+written. Use this checklist before your next order, and again before you
+accept the delivery.</p>
+
+<h2>Before you order</h2>
+<ul>
+<li><strong>One keyword, one intent.</strong> Tell the writer the target keyword and what the searcher wants: to learn, to compare, or to buy. An article aimed at the wrong intent will not rank no matter how well it is written.</li>
+<li><strong>Your page, your voice.</strong> Link to one or two existing pages on your site that sound like you. Writers match a reference far more reliably than an adjective like "professional" or "friendly".</li>
+<li><strong>Claims you can prove.</strong> List the facts the article may use: your product details, your process, your real numbers if you publish them. Anything not on that list should be written carefully or left out — invented statistics are a liability, not a feature.</li>
+<li><strong>Internal links.</strong> Name the two or three pages the new article should point to. This takes you one minute and saves the writer from guessing at your site structure.</li>
+</ul>
+
+<h2>What a good delivery looks like</h2>
+<ul>
+<li><strong>An outline you approved first.</strong> H1-H3 headings agreed before drafting prevent the most expensive rewrite: the structural one.</li>
+<li><strong>A first paragraph that answers.</strong> The reader's question should be addressed in the opening lines, not after three paragraphs of throat-clearing. Search engines reward it; humans require it.</li>
+<li><strong>Headings that carry meaning.</strong> Each subheading should tell a skimming reader something true. "Introduction" and "Conclusion" tell them nothing.</li>
+<li><strong>Natural keyword use.</strong> The keyword belongs in the title, the opening, and a heading or two — then the writing should forget about it and serve the topic. Repetition that a human can hear is stuffing, whatever a tool score says.</li>
+<li><strong>Meta title and description included.</strong> Written for the click: specific, honest, and matched to what the page actually delivers.</li>
+<li><strong>A publish-ready file.</strong> Clean formatting you can paste into your CMS without cleaning up stray markup or placeholder text.</li>
+</ul>
+
+<h2>Two things to refuse</h2>
+<p>First, ranking guarantees. No honest writer can promise a position, a
+timeline, or traffic — too much of that sits with your site's authority, your
+competition, and the search engine itself. A writer who guarantees rankings
+is selling you the guarantee, not the outcome.</p>
+<p>Second, volume without review. Ten unreviewed articles published in a week
+can do more harm than one good article a week for a month. Whatever your
+cadence, keep a human read-through between delivery and publication; it is
+the cheapest quality control there is.</p>
+
+<h2>The acceptance test</h2>
+<p>Before approving a delivery, read the article once as your own customer.
+Would you finish it? Does every claim on the page trace back to something you
+can stand behind? Could you publish it today without editing? Three yeses
+mean the checklist worked — and means you have found a writer worth ordering
+from again.</p>
+""",
+    },
+    "n8n-lead-follow-up-for-b2b-teams": {
+        "title": "n8n Lead Follow-Up for B2B Teams: What to Automate First",
+        "description": "A practical order of operations for automating B2B lead follow-up in n8n: capture, score, respond, log, alert — and what to keep human.",
+        "gig_url": "http://www.fiverr.com/s/BbbKj7G",
+        "gig_label": "Order the n8n lead follow-up pack on Fiverr",
+        "body": """
+<h1>n8n Lead Follow-Up for B2B Teams: What to Automate First</h1>
+<p>Most B2B leads do not go cold because the offer was wrong. They go cold
+because the first reply took a day, the second follow-up never happened, and
+nobody noticed. n8n — the open-source workflow automation tool — is well
+suited to fixing exactly that, because the follow-up chain is mostly
+mechanical. The trick is automating in the right order. Here is the sequence
+that works for small teams.</p>
+
+<h2>Step 1: Capture every lead into one place</h2>
+<p>Before any cleverness, make sure every enquiry — web form, landing page,
+inbox — lands in a single log with a timestamp, contact details, and source.
+In n8n this is a webhook or form trigger writing to a spreadsheet or CRM.
+If a lead can arrive and not be recorded, nothing downstream matters.</p>
+
+<h2>Step 2: Score before you respond</h2>
+<p>A simple scoring rule — company size, role, what they asked about, how
+complete their details are — lets the workflow treat a pricing question from
+a decision-maker differently from a student doing research. Keep the first
+version crude: two or three fields, one threshold (for example, score 70+ is
+"hot"). You can refine it after a month of real leads; you cannot refine a
+system that does not exist.</p>
+
+<h2>Step 3: Automate the first response, not the relationship</h2>
+<p>The highest-value automation is the instant acknowledgement: a short,
+specific email that confirms receipt, answers the one question every lead
+asks ("what happens next and when"), and arrives in minutes instead of
+hours. Write it like a person, because a person approved it. Everything after
+this first touch should feel progressively more human, not less.</p>
+
+<h2>Step 4: Route hot leads to a human immediately</h2>
+<p>When a lead crosses your hot threshold, the workflow should stop being a
+mailbox and start being an alarm: an instant message to the owner or rep with
+the lead's details and score attached. Speed matters more here than polish.
+A mediocre reply in five minutes beats a beautiful one tomorrow.</p>
+
+<h2>Step 5: Schedule the follow-ups nobody remembers</h2>
+<p>A three-touch sequence — roughly day 0, day 3, day 7 — written in advance
+and sent only while the lead has not replied, covers the gap where most
+deals quietly die. Each message should add something: a relevant detail, a
+short answer to a common objection, an easy way to book a call. The moment a
+human conversation starts, the automation must stop; nothing burns a lead
+like a scheduled email arriving mid-negotiation.</p>
+
+<h2>What to keep human</h2>
+<ul>
+<li>Pricing, negotiation, and anything resembling a commitment.</li>
+<li>Replies to unusual questions — route them, do not template them.</li>
+<li>The final review of every automated message before it goes live, and a fresh read monthly after that.</li>
+</ul>
+
+<h2>A note on setup hygiene</h2>
+<p>An import-ready workflow should arrive with placeholder values for API
+keys and sheet IDs, a test lead you can run safely, and a setup guide that
+assumes you are seeing n8n for the first time. You should never need to share
+your passwords with anyone to get a workflow installed — if a seller asks
+for them, that is your answer about the seller.</p>
+
+<h2>Where to start this week</h2>
+<p>Capture, score, instant first response, hot-lead alert, three scheduled
+follow-ups. Five pieces, in that order. Built once, this chain quietly does
+the remembering for your whole pipeline — which is most of what follow-up
+ever was.</p>
+""",
+    },
+}
+
+
+@app.get("/", include_in_schema=False)
+async def home():
+    body = (
+        "<h1>OMEGA Opportunity Intel</h1>"
+        "<p>Research and due-diligence utilities for agents and small teams, "
+        "plus a small public blog on buying writing and automation services well.</p>"
+        "<p><a href=\"/blog\">Read the blog</a> &middot; "
+        "<a href=\"/.well-known/x402\">x402 service manifest</a> &middot; "
+        "<a href=\"/health\">Service health</a></p>"
+    )
+    return _blog_page("OMEGA Opportunity Intel",
+                      "OMEGA Opportunity Intel: x402 research utilities and a practical blog on UGC scripts, SEO articles, and n8n lead follow-up.",
+                      body)
+
+
+@app.get("/blog", include_in_schema=False)
+async def blog_index():
+    items = "".join(
+        f"<li><a href=\"/blog/{slug}\">{post['title']}</a><br>"
+        f"<span class=\"note\">{post['description']}</span></li>"
+        for slug, post in _BLOG_POSTS.items()
+    )
+    return _blog_page("Blog — OMEGA Opportunity Intel",
+                      "Practical buyer guides: UGC script briefs, SEO article checklists, and n8n lead follow-up for B2B teams.",
+                      f"<h1>Blog</h1><ul>{items}</ul>")
+
+
+@app.get("/blog/{slug}", include_in_schema=False)
+async def blog_post(slug: str):
+    post = _BLOG_POSTS.get(slug)
+    if post is None:
+        return HTMLResponse(content="Not found", status_code=404)
+    cta = (
+        "<div class=\"cta\"><p><strong>Need this done for you?</strong> "
+        "This is one of the writing and automation services offered on Fiverr "
+        "by Khaled Al Zbaar — AI-assisted drafting, every deliverable personally "
+        "reviewed before it reaches you.</p>"
+        f"<p><a href=\"{post['gig_url']}\">{post['gig_label']}</a></p></div>"
+    )
+    note = ("<p class=\"note\">Drafted with AI assistance and personally "
+            "reviewed before publishing. No invented results or testimonials — "
+            "the advice above is the deliverable you can judge.</p>")
+    return _blog_page(post["title"], post["description"],
+                      post["body"] + cta + note)
+
+
 if __name__ == "__main__":
     import uvicorn
 
