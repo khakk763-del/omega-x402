@@ -11,6 +11,9 @@ WORKDIR /app
 COPY x402_service/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Campaign + catalog HTML served by app.py routes (2026-10-11)
+COPY catalog.html catalog-ar.html whatsapp-gulf.html ./
+
 # app + the screener package it wraps (paths mirror the repo layout)
 COPY x402_service/ ./x402_service/
 COPY opportunity_intelligence/ ./opportunity_intelligence/
