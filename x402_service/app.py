@@ -1380,6 +1380,33 @@ async def blog_post(slug: str):
                       post["body"] + cta + note)
 
 
+
+
+# ---- 2026-10-11 service catalog + WhatsApp campaign pages (free, unpriced) ----
+from pathlib import Path as _Path
+
+def _serve_repo_html(filename: str):
+    p = _Path(__file__).resolve().parent.parent / filename
+    if not p.exists():
+        return HTMLResponse(content="Not found", status_code=404)
+    return HTMLResponse(content=p.read_text(encoding="utf-8"))
+
+
+@app.get("/catalog", include_in_schema=False)
+async def catalog_en():
+    return _serve_repo_html("catalog.html")
+
+
+@app.get("/catalog-ar", include_in_schema=False)
+async def catalog_ar():
+    return _serve_repo_html("catalog-ar.html")
+
+
+@app.get("/whatsapp-gulf", include_in_schema=False)
+async def whatsapp_gulf():
+    return _serve_repo_html("whatsapp-gulf.html")
+
+
 if __name__ == "__main__":
     import uvicorn
 
