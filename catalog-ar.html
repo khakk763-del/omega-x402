@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMEGA Studio — كتالوغ الخدمات</title>
+<style>
+  :root { --bg:#0f0d0a; --card:#1a1510; --gold:#e8a33d; --cream:#f7ead7; --muted:#b8a67f; --line:#3a2f1e; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; background:var(--bg); color:var(--cream); line-height:1.9; }
+  .hero { text-align:center; padding:64px 20px 44px; background:radial-gradient(ellipse at 50% 0%, #2a2114 0%, #0f0d0a 70%); border-bottom:2px solid var(--gold); }
+  .hero .logo { font-size:2.4rem; color:var(--gold); letter-spacing:2px; font-weight:800; }
+  .hero p { color:var(--muted); max-width:560px; margin:14px auto 0; font-size:1.05rem; }
+  .wrap { max-width:900px; margin:0 auto; padding:36px 20px 70px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px; margin-top:8px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px 22px; position:relative; }
+  .card .icon { font-size:2rem; }
+  .card h3 { color:var(--gold); margin:10px 0 6px; font-size:1.15rem; }
+  .card .price { font-size:1.6rem; font-weight:800; color:var(--cream); margin:8px 0; }
+  .card .price small { font-size:.85rem; color:var(--muted); font-weight:400; }
+  .card ul { list-style:none; margin-top:10px; font-size:.93rem; color:var(--muted); }
+  .card ul li { padding:5px 24px 5px 0; position:relative; }
+  .card ul li::before { content:"✓"; position:absolute; right:0; color:var(--gold); font-weight:bold; }
+  .card .eta { margin-top:12px; font-size:.82rem; color:var(--gold); border-top:1px dashed var(--line); padding-top:10px; }
+  .star { position:absolute; top:-12px; left:16px; background:var(--gold); color:#1a120b; font-size:.75rem; font-weight:800; padding:4px 12px; border-radius:999px; }
+  .bundle { border:2px solid var(--gold); background:linear-gradient(135deg,#241a0c,#1a1510); }
+  .steps { display:flex; gap:16px; margin-top:34px; flex-wrap:wrap; }
+  .step { flex:1; min-width:200px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; text-align:center; }
+  .step .n { display:inline-block; width:38px; height:38px; line-height:38px; border-radius:50%; background:var(--gold); color:#1a120b; font-weight:800; margin-bottom:10px; }
+  .step h4 { color:var(--gold); margin-bottom:6px; }
+  .step p { font-size:.9rem; color:var(--muted); }
+  .honest { margin-top:34px; background:#14110c; border:1px dashed var(--gold); border-radius:12px; padding:20px 24px; font-size:.92rem; color:var(--muted); }
+  .honest strong { color:var(--gold); }
+  .cta { text-align:center; margin-top:36px; }
+  .cta a { display:inline-block; background:var(--gold); color:#1a120b; font-weight:800; padding:16px 42px; border-radius:12px; text-decoration:none; font-size:1.1rem; }
+  .cta p { margin-top:12px; color:var(--muted); font-size:.9rem; }
+  h2.sec { color:var(--gold); font-size:1.1rem; margin:44px 0 16px; border-bottom:1px solid var(--line); padding-bottom:10px; }
+  .note { text-align:center; color:#6f6350; font-size:.78rem; margin-top:40px; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="logo">Ω OMEGA STUDIO</div>
+  <p>خدمات رقمية بسيطة وصادقة للمطاعم والشركات المحلية.<br>أسعار ثابتة. تسليم سريع. توافق على كل شيء قبل النشر.</p>
+</div>
+
+<div class="wrap">
+  <h2 class="sec">خدماتنا</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="icon">🍽️</div>
+      <h3>صفحة منيو للجوال</h3>
+      <div class="price">299 ر.س <small>/ 25 د.ك — سعر ثابت</small></div>
+      <ul>
+        <li>صفحة منيو أنيقة للجوال تُفتح بـ QR على الطاولة</li>
+        <li>زر اتصال مباشر وزر اتجاهات</li>
+        <li>بألوان مطعمك ومنيوك وساعات دوامك</li>
+      </ul>
+      <div class="eta">⏱ التسليم: 2–3 أيام</div>
+    </div>
+
+    <div class="card">
+      <div class="star">الأكثر طلباً</div>
+      <div class="icon">🏪</div>
+      <h3>الحزمة الكاملة للحضور الرقمي</h3>
+      <div class="price">549 ر.س <small>/ 45 د.ك — سعر ثابت</small></div>
+      <ul>
+        <li>كل ما في صفحة المنيو</li>
+        <li>تدقيق وتحسين حسابك على خرائط جوجل</li>
+        <li>بطاقات QR مطبوعة "قيّمنا"</li>
+        <li>قوالب جاهزة للرد على التقييمات</li>
+      </ul>
+      <div class="eta">⏱ التسليم: 3–4 أيام</div>
+    </div>
+
+    <div class="card">
+      <div class="icon">🤖</div>
+      <h3>أتمتة متابعة العملاء</h3>
+      <div class="price">499 ر.س <small>/ 40 د.ك — سعر ثابت</small></div>
+      <ul>
+        <li>رد فوري على كل استفسار جديد (واتساب/نموذج)</li>
+        <li>متابعة تلقائية بعد 24 و72 ساعة</li>
+        <li>تنبيه فوري عند العميل الجاد</li>
+        <li>دليل تركيب + قائمة فحص</li>
+      </ul>
+      <div class="eta">⏱ التسليم: 2–3 أيام</div>
+    </div>
+
+    <div class="card">
+      <div class="icon">📋</div>
+      <h3>قوائم عملاء B2B</h3>
+      <div class="price">175 ر.س <small>/ 15 د.ك — لـ 50 عميل</small></div>
+      <ul>
+        <li>50 عميل — 175 ر.س · 100 عميل — 375 ر.س</li>
+        <li>200 عميل — 650 ر.س</li>
+        <li>إيميلات موثقة، ملف نظيف</li>
+        <li>بحث يدوي حقيقي</li>
+      </ul>
+      <div class="eta">⏱ التسليم: 2–5 أيام</div>
+    </div>
+
+    <div class="card bundle">
+      <div class="icon">💎</div>
+      <h3>باقة النمو — وفّر 100 ر.س</h3>
+      <div class="price">749 ر.س <small>/ 60 د.ك — سعر ثابت</small></div>
+      <ul>
+        <li>الحزمة الكاملة + قائمة 50 عميل محتمل</li>
+        <li>حضورك الرقمي وعملاؤك القادمون في باقة واحدة</li>
+      </ul>
+      <div class="eta">⏱ التسليم: 4–5 أيام</div>
+    </div>
+  </div>
+
+  <h2 class="sec">كيف نشتغل</h2>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h4>ترد علينا</h4><p>تختار الخدمة ونثبت السعر كتابةً — بدون مفاجآت.</p></div>
+    <div class="step"><div class="n">2</div><h4>نبني</h4><p>نجهز كل شيء ونرسل لك معاينة للموافقة قبل أي نشر.</p></div>
+    <div class="step"><div class="n">3</div><h4>تنطلق</h4><p>الدفع عند التسليم. إصلاح مجاني لمدة 14 يوماً بعد التسليم.</p></div>
+  </div>
+
+  <div class="honest">
+    <strong>وعدنا الصادق:</strong> كل شيء نبنيه بمساعدة الذكاء الاصطناعي ويراجعه صاحب الاستوديو شخصياً قبل التسليم. بدون تقييمات وهمية، بدون نتائج مخترعة، بدون رسوم خفية. وإذا في شيء مو عاجبك، نصلحه مجاناً لمدة 14 يوماً.
+  </div>
+
+  <div class="cta">
+    <a href="mailto:khakk763@gmail.com?subject=OMEGA%20Studio%20—%20مهتم%20بخدماتكم">ابدأ الآن — رد بالإيميل</a>
+    <p>تفضل المنصات؟ تجدنا على Fiverr: fiverr.com/khaled7754</p>
+  </div>
+
+  <p class="note">OMEGA Studio · خدمات رقمية للشركات المحلية · الكتالوغ v1 — أكتوبر 2026</p>
+</div>
+</body>
+</html>
