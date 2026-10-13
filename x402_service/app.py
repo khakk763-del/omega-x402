@@ -1407,6 +1407,11 @@ async def whatsapp_gulf():
     return _serve_repo_html("whatsapp-gulf.html")
 
 
+@app.get("/ai-lead-machine-order", include_in_schema=False)
+async def ai_lead_machine_order():
+    return _serve_repo_html("ai-lead-machine-order.html")
+
+
 if __name__ == "__main__":
     import uvicorn
 
